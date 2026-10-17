@@ -306,6 +306,7 @@ class CaptionPipeline:
         source = self._source_code(result.language, result.language_probability, result.duration, False)
         revision = self._bump_revision(segment_id)
         self._last_partial_text[segment_id] = result.text
+        expected = self._should_translate(source)
         segment = CaptionSegment(
             id=segment_id,
             source_text=result.text,
@@ -315,13 +316,15 @@ class CaptionPipeline:
             end=event.end,
             is_final=False,
             revision=revision,
-            translation_pending=self._should_translate(source),
+            translation_pending=expected,
+            translation_expected=expected,
         )
         if source == self._target_lang:
             segment.translated_text = result.text
             segment.translation_pending = False
+            segment.translation_expected = False
         self._emit(segment)
-        if self._should_translate(source):
+        if expected:
             self._maybe_submit_partial(segment)
 
     def _handle_final(self, event: VadEvent) -> None:
@@ -338,6 +341,7 @@ class CaptionPipeline:
             return
         source = self._source_code(result.language, result.language_probability, result.duration, True)
         revision = self._bump_revision(segment_id)
+        expected = self._should_translate(source)
         segment = CaptionSegment(
             id=segment_id,
             source_text=text,
@@ -347,18 +351,20 @@ class CaptionPipeline:
             end=event.end,
             is_final=True,
             revision=revision,
-            translation_pending=self._should_translate(source),
+            translation_pending=expected,
+            translation_expected=expected,
         )
         if source == self._target_lang:
             segment.translated_text = text
             segment.translation_pending = False
+            segment.translation_expected = False
         self._recent_sources.append(text)
         self._current_id = None
         self._last_partial_text.pop(segment_id, None)
         self._partial_translation_at.pop(segment_id, None)
         self._partial_translation_text.pop(segment_id, None)
         self._emit(segment)
-        if self._should_translate(source):
+        if expected:
             context = list(self._context_pairs)
             self._submit_final(segment, context)
         elif source == self._target_lang:

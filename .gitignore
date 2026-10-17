@@ -49,4 +49,6 @@ samples/
 .wheel-test/
 build-gpu/
 dist-gpu/
+build-new/
+dist-new/
 docs/_crop.png

@@ -77,7 +77,7 @@ class TranslationConfig:
 @dataclass
 class OverlayConfig:
     enabled: bool = True
-    show_source: bool = True
+    show_source: bool = False
     font_size: int = 26
     opacity: float = 0.84
     click_through: bool = False

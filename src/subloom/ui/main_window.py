@@ -115,6 +115,10 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(22, 16, 22, 18)
         root.setSpacing(14)
         root.addWidget(self._build_header())
+        divider = QFrame()
+        divider.setObjectName("NeonDivider")
+        divider.setFixedHeight(2)
+        root.addWidget(divider)
 
         body = QHBoxLayout()
         body.setSpacing(16)

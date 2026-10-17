@@ -51,8 +51,9 @@ class LogoMark(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         rect = QRectF(0.5, 0.5, self._size - 1, self._size - 1)
         gradient = QLinearGradient(rect.topLeft(), rect.bottomRight())
-        gradient.setColorAt(0, QColor("#7BF0D2"))
-        gradient.setColorAt(1, QColor("#37B99B"))
+        gradient.setColorAt(0, QColor(theme.ACCENT_2))
+        gradient.setColorAt(0.52, QColor(theme.ACCENT_3))
+        gradient.setColorAt(1, QColor(theme.ACCENT))
         painter.setBrush(gradient)
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(rect, self._size * 0.28, self._size * 0.28)
@@ -156,7 +157,7 @@ class ToggleSwitch(QAbstractButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         track = QRectF(1, 2, self.width() - 2, self.height() - 4)
-        off = QColor("#263444")
+        off = QColor("#2A2340")
         on = QColor(theme.ACCENT)
         color = QColor(
             int(off.red() + (on.red() - off.red()) * self._offset),
@@ -246,13 +247,13 @@ class LevelMeter(QWidget):
             rect = QRectF(x, 5, width, self.height() - 10)
             if index < active:
                 if index >= count - 4:
-                    color = QColor(theme.ERROR)
+                    color = QColor(theme.ACCENT_3)
                 elif index >= count - 9:
                     color = QColor(theme.WARN)
                 else:
                     color = QColor(theme.ACCENT)
             else:
-                color = QColor("#22303F")
+                color = QColor("#2A2340")
             painter.setBrush(color)
             painter.setPen(Qt.NoPen)
             painter.drawRoundedRect(rect, 2, 2)
@@ -333,17 +334,53 @@ class CaptionCard(QFrame):
         )
         translated = segment.translated_text.strip()
         source = segment.source_text.strip()
-        self._translation.setText(translated or source)
+        expected = bool(segment.translation_expected or segment.translation_pending)
+        failed = bool(segment.warning)
+        if translated:
+            main = translated
+            kind = "translation"
+            pending = bool(segment.translation_pending)
+        elif expected and not failed:
+            main = "正在翻译…"
+            kind = "placeholder"
+            pending = False
+        elif failed:
+            main = source
+            kind = "error"
+            pending = False
+        else:
+            main = source
+            kind = "source"
+            pending = False
+        self._translation.setText(main)
+        colors = {
+            "translation": theme.TEXT,
+            "placeholder": theme.MUTED,
+            "source": theme.TEXT_SOFT,
+            "error": theme.WARN,
+        }
+        self._translation.setStyleSheet(
+            f"color: {colors[kind]}; font-size: 21px; font-weight: 600;"
+        )
         self._source.setText(source)
         show_original = bool(
             show_source and translated and source and translated != source
         )
         self._source.setVisible(show_original)
-        self._pending.setVisible(bool(segment.translation_pending))
-        self._warning.setVisible(bool(segment.warning))
-        if segment.warning:
+        self._pending.setVisible(pending)
+        self._warning.setVisible(failed)
+        if failed:
             text = segment.warning if len(segment.warning) <= 140 else segment.warning[:137] + "…"
             self._warning.setText("⚠ " + text)
+        language = language_name(segment.source_lang)
+        if (
+            not translated
+            and not expected
+            and segment.target_lang
+            and segment.target_lang != segment.source_lang
+        ):
+            language += " · 原文"
+        self._language.setText(language)
         self.setProperty("partial", not segment.is_final)
         self.style().unpolish(self)
         self.style().polish(self)
@@ -393,15 +430,16 @@ class WaveMark(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         center = self.rect().center()
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(95, 227, 192, 28))
+        painter.setBrush(QColor(155, 108, 255, 30))
         painter.drawEllipse(center, self.width() / 2 - 2, self.height() / 2 - 2)
-        painter.setPen(QPen(QColor(theme.ACCENT), 2.4, Qt.SolidLine, Qt.RoundCap))
         bars = 7
         spacing = 7
         start = center.x() - (bars - 1) * spacing / 2
         for i in range(bars):
             amp = 5 + (math.sin(self._phase + i * 0.8) + 1) * 7
             x = start + i * spacing
+            color = theme.ACCENT if i % 2 == 0 else theme.ACCENT_2
+            painter.setPen(QPen(QColor(color), 2.4, Qt.SolidLine, Qt.RoundCap))
             painter.drawLine(QPointF(x, center.y() - amp / 2), QPointF(x, center.y() + amp / 2))
         painter.end()
 

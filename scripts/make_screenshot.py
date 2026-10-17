@@ -20,7 +20,7 @@ def main() -> int:
     app = QApplication(sys.argv[:1])
     apply_theme(app)
     config = AppConfig()
-    config.translation.provider = "local"
+    config.translation.provider = "cloud"
     config.translation.target_lang = "zh"
     config.overlay.enabled = False
     config.first_run = False
@@ -39,7 +39,7 @@ def main() -> int:
             end=4.6,
             is_final=True,
             revision=3,
-            provider="local",
+            provider="cloud",
         ),
         CaptionSegment(
             id="demo-2",
@@ -51,7 +51,7 @@ def main() -> int:
             end=9.3,
             is_final=True,
             revision=3,
-            provider="local",
+            provider="cloud",
         ),
         CaptionSegment(
             id="demo-3",
@@ -63,7 +63,7 @@ def main() -> int:
             end=13.4,
             is_final=True,
             revision=3,
-            provider="local",
+            provider="cloud",
         ),
         CaptionSegment(
             id="demo-4",
@@ -76,6 +76,7 @@ def main() -> int:
             is_final=False,
             revision=1,
             translation_pending=True,
+            translation_expected=True,
         ),
     ]
 
@@ -85,7 +86,7 @@ def main() -> int:
         window._status_pill.set_state("listening", "聆听中")
         window._status_text.setText("已识别三句，继续聆听…")
         window._detected_label.setText("英语 · 98%")
-        window._provider_label.setText("本地翻译")
+        window._provider_label.setText("云端翻译")
         window._level_meter.set_level(-14)
         window._elapsed_label.setText("00:18")
         window._stats_label.setText("3 句")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from PySide6.QtCore import QPoint, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPen
+from PySide6.QtGui import QBrush, QColor, QFont, QGuiApplication, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMenu, QVBoxLayout, QWidget
 
 from ..config import OverlayConfig
@@ -26,6 +26,8 @@ class SubtitleOverlay(QWidget):
         super().__init__(parent)
         self.config = config
         self._segment: CaptionSegment | None = None
+        self._last_translation_text = ""
+        self._last_translation_id = ""
         self._drag_origin: QPoint | None = None
         self._window_origin: QPoint | None = None
         self._fitted_height = 0
@@ -87,12 +89,16 @@ class SubtitleOverlay(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         rect = QRectF(1, 1, self.width() - 2, self.height() - 2)
-        alpha = int(max(0.2, min(1.0, self.config.opacity)) * 235)
-        painter.setBrush(QColor(7, 11, 16, alpha))
-        painter.setPen(QPen(QColor(255, 255, 255, 22), 1))
-        painter.drawRoundedRect(rect, 17, 17)
-        # A slim luminous edge makes the overlay readable over bright video.
-        painter.setPen(QPen(QColor(95, 227, 192, 110), 1.2))
+        alpha = int(max(0.2, min(1.0, self.config.opacity)) * 242)
+        painter.setBrush(QColor(7, 6, 12, alpha))
+        painter.setPen(QPen(QColor(155, 108, 255, 48), 1))
+        painter.drawRoundedRect(rect, 19, 19)
+        # A neon gradient edge gives the overlay a modern, broadcast feel.
+        gradient = QLinearGradient(rect.left(), rect.top(), rect.right(), rect.top())
+        gradient.setColorAt(0, QColor(theme.ACCENT))
+        gradient.setColorAt(0.5, QColor(theme.ACCENT_2))
+        gradient.setColorAt(1, QColor(theme.ACCENT_3))
+        painter.setPen(QPen(QBrush(gradient), 1.6))
         painter.drawLine(
             int(rect.left() + 26),
             int(rect.top()),
@@ -106,24 +112,68 @@ class SubtitleOverlay(QWidget):
         self._segment = segment
         translated = segment.translated_text.strip()
         source = segment.source_text.strip()
-        main = translated or source
+        expected = bool(segment.translation_expected or segment.translation_pending)
+        failed = bool(segment.warning)
+        same_segment = bool(
+            self._last_translation_id and self._last_translation_id == segment.id
+        )
+        show_original = False
+        hint = ""
+        kind = "translation"
+
+        if translated:
+            main = translated
+            self._last_translation_text = translated
+            self._last_translation_id = segment.id
+            show_original = bool(
+                self.config.show_source and source and translated != source
+            )
+            hint = "正在聆听…" if not segment.is_final else ""
+        elif expected and not failed:
+            # Never present source text as if it were the translated subtitle.
+            # While waiting, keep the previous translation visible instead.
+            if self._last_translation_text:
+                main = self._last_translation_text
+                hint = "正在更新译文…" if same_segment else "正在翻译新一句…"
+            else:
+                main = "正在翻译…"
+                hint = ""
+                kind = "placeholder"
+        elif failed:
+            main = source or "翻译失败"
+            hint = "翻译失败 · 显示原文"
+            kind = "error"
+        else:
+            main = source
+            hint = "仅原文" if segment.target_lang and segment.target_lang != segment.source_lang else ""
+            kind = "source"
+
         if not main:
             self._translation.setText("")
             self._source.setText("")
+            self._source.setVisible(False)
             self._hint.setText("正在聆听…")
             self._hint.show()
             self._refit()
             return
+
         self._translation.setText(main)
-        show_original = bool(
-            self.config.show_source and translated and source and translated != source
+        colors = {
+            "translation": theme.TEXT,
+            "placeholder": theme.MUTED,
+            "source": theme.TEXT_SOFT,
+            "error": theme.WARN,
+        }
+        self._translation.setStyleSheet(
+            f"color: {colors[kind]}; font-size: {self.config.font_size}px; font-weight: 600;"
         )
         self._source.setText(source if show_original else "")
         self._source.setVisible(show_original)
-        self._hint.setText(
-            "翻译中…" if segment.translation_pending else ("正在聆听…" if not segment.is_final else "")
+        self._hint.setText(hint)
+        self._hint.setStyleSheet(
+            f"color: {theme.WARN if kind == 'error' else theme.DIM}; font-size: 11px;"
         )
-        self._hint.setVisible(bool(self._hint.text()))
+        self._hint.setVisible(bool(hint))
         self._live.setText("●  LIVE" if not segment.is_final else "●  FINAL")
         self._live.setStyleSheet(
             f"color: {theme.LIVE if not segment.is_final else theme.MUTED};"
@@ -131,13 +181,19 @@ class SubtitleOverlay(QWidget):
         )
         src = language_name(segment.source_lang)
         tgt = language_name(segment.target_lang)
-        self._lang.setText(f"{src}  →  {tgt}" if tgt and tgt != src else src)
+        if expected or translated:
+            self._lang.setText(f"{src}  →  {tgt}" if tgt and tgt != src else src)
+        elif tgt and tgt != src:
+            self._lang.setText(f"{src}  ·  原文")
+        else:
+            self._lang.setText(src)
         self._refit()
 
     def set_session_hint(self, text: str = "正在聆听…") -> None:
         if self._segment is None or not self._segment.source_text:
             self._translation.setText("")
             self._source.setText("")
+            self._source.setVisible(False)
             self._hint.setText(text)
             self._hint.show()
             self._live.setText("●  LIVE")
@@ -145,8 +201,11 @@ class SubtitleOverlay(QWidget):
 
     def clear(self) -> None:
         self._segment = None
+        self._last_translation_text = ""
+        self._last_translation_id = ""
         self._translation.setText("")
         self._source.setText("")
+        self._source.setVisible(False)
         self._hint.setText("正在聆听…")
         self._hint.show()
         self._refit()

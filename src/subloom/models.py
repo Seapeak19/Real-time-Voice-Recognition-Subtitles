@@ -67,6 +67,10 @@ class CaptionSegment:
     provider: str = ""
     warning: str = ""
     translation_pending: bool = False
+    # True when this segment is expected to be translated but no translation
+    # has arrived yet.  The overlay uses this to avoid showing source text as
+    # if it were the translated subtitle.
+    translation_expected: bool = False
 
     @property
     def text_for_display(self) -> str:

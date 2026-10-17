@@ -47,6 +47,7 @@ class TranscriptStore:
         current.end = incoming.end
         current.is_final = incoming.is_final
         current.revision = incoming.revision
+        current.translation_expected = incoming.translation_expected
         if incoming.translated_text:
             current.translated_text = incoming.translated_text
         if incoming.provider:

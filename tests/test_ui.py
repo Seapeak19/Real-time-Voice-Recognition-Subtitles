@@ -70,6 +70,7 @@ def test_overlay_updates(qtbot):
     config = make_config()
     config.overlay.width = 600
     config.overlay.font_size = 24
+    config.overlay.show_source = True
     overlay = SubtitleOverlay(config.overlay)
     qtbot.addWidget(overlay)
     overlay.show()
@@ -91,3 +92,85 @@ def test_overlay_updates(qtbot):
     assert overlay._source.text() == "Hello"
     assert "英语" in overlay._lang.text()
     overlay.close()
+
+
+def test_overlay_does_not_show_source_while_translation_is_pending(qtbot):
+    config = make_config()
+    config.overlay.width = 600
+    overlay = SubtitleOverlay(config.overlay)
+    qtbot.addWidget(overlay)
+    segment = CaptionSegment(
+        id="pending-1",
+        source_text="This is English source text",
+        source_lang="en",
+        target_lang="zh",
+        start=0,
+        end=2,
+        is_final=False,
+        revision=1,
+        translation_pending=True,
+        translation_expected=True,
+    )
+    overlay.set_segment(segment)
+    assert overlay._translation.text() == "正在翻译…"
+    assert overlay._source.text() == ""
+    assert not overlay._source.isVisible()
+
+
+def test_overlay_keeps_previous_translation_while_next_one_is_pending(qtbot):
+    config = make_config()
+    config.overlay.width = 600
+    overlay = SubtitleOverlay(config.overlay)
+    qtbot.addWidget(overlay)
+    overlay.set_segment(
+        CaptionSegment(
+            id="old",
+            source_text="First sentence",
+            translated_text="第一句",
+            source_lang="en",
+            target_lang="zh",
+            start=0,
+            end=1,
+            is_final=True,
+            revision=2,
+        )
+    )
+    overlay.set_segment(
+        CaptionSegment(
+            id="new",
+            source_text="Second sentence",
+            source_lang="en",
+            target_lang="zh",
+            start=1,
+            end=2,
+            is_final=False,
+            revision=1,
+            translation_pending=True,
+            translation_expected=True,
+        )
+    )
+    assert overlay._translation.text() == "第一句"
+    assert "翻译" in overlay._hint.text()
+    assert overlay._source.text() == ""
+
+
+def test_caption_card_pending_does_not_render_source_as_translation(qtbot):
+    from subloom.ui.widgets import CaptionCard
+
+    card = CaptionCard(
+        CaptionSegment(
+            id="pending-card",
+            source_text="English words",
+            source_lang="en",
+            target_lang="zh",
+            start=0,
+            end=1,
+            is_final=False,
+            revision=1,
+            translation_pending=True,
+            translation_expected=True,
+        )
+    )
+    qtbot.addWidget(card)
+    assert card._translation.text() == "正在翻译…"
+    assert not card._source.isVisible()
