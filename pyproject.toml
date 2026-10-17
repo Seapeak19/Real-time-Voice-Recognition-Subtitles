@@ -1,0 +1,83 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "subloom"
+version = "0.1.0"
+description = "SubLoom (织幕) — cross-platform real-time speech translation captions."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "SubLoom contributors" }]
+keywords = ["speech-recognition", "translation", "subtitles", "whisper", "nllb"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Win32 (MS Windows)",
+  "Environment :: MacOS X",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+  "PySide6-Essentials>=6.7,<7",
+  "faster-whisper>=1.1,<2",
+  "ctranslate2>=4.5,<5",
+  "sounddevice>=0.5,<1",
+  "soundcard>=0.4.4,<1; sys_platform == 'win32'",
+  "webrtcvad-wheels>=2.0.14,<3",
+  "numpy>=1.26,<3",
+  "httpx>=0.27,<1",
+  "platformdirs>=4.2,<5",
+  "huggingface-hub>=0.26,<3",
+  "sentencepiece>=0.2,<1",
+  "soxr>=0.5,<2",
+  "av>=13,<20",
+  "keyring>=25,<26",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<10",
+  "pytest-qt>=4.4,<5",
+  "respx>=0.22,<1",
+  "ruff>=0.6,<1",
+  "pyinstaller>=6.10,<7",
+]
+gpu = [
+  "nvidia-cublas-cu12>=12.4,<13; sys_platform == 'win32'",
+  "nvidia-cudnn-cu12>=9.1,<10; sys_platform == 'win32'",
+  "nvidia-cuda-nvrtc-cu12>=12.4,<13; sys_platform == 'win32'",
+]
+
+[project.scripts]
+subloom = "subloom.app:main"
+
+[project.urls]
+Homepage = "https://github.com/Seapeak19/Real-time-Voice-Recognition-Subtitles"
+Issues = "https://github.com/Seapeak19/Real-time-Voice-Recognition-Subtitles/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+subloom = ["assets/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+  "ignore:.*pkg_resources.*:DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501", "SIM105", "SIM108", "SIM102", "B027"]

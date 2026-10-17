@@ -1,0 +1,8 @@
+# Build requirements
+# CPU build:
+#   pip install -e ".[dev]"
+#
+# Windows GPU build (adds CUDA 12 runtime DLLs, a large download):
+#   pip install -e ".[dev,gpu]"
+#
+# PyInstaller itself is in the dev extra.

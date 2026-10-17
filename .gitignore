@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Models and local data (never commit weights)
+models/
+*.bin
+*.ct2
+*.onnx
+*.safetensors
+*.pt
+*.pth
+*.gguf
+*.npz
+
+# PyInstaller
+*.spec.bak
+packaging/build/
+packaging/dist/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local config, logs, recordings
+*.log
+config.local.json
+recordings/
+samples/
+.test-data/
+.smoke-data/
+.screenshot-data/
+.packaged-test/
+.wheel-test/
+docs/_crop.png

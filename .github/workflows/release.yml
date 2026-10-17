@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Build
+        run: python -m PyInstaller packaging/subloom.spec --noconfirm
+
+      - name: Packaged self-check (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist/SubLoom/SubLoom.exe" -ArgumentList "--self-check" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Packaged self-check failed: $($p.ExitCode)" }
+
+      - name: Packaged self-check (macOS)
+        if: runner.os == 'macOS'
+        run: ./dist/SubLoom.app/Contents/MacOS/SubLoom --self-check
+
+      - name: Archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path "dist/SubLoom" -DestinationPath "SubLoom-windows-x64.zip"
+
+      - name: Archive (macOS)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/SubLoom.app" "SubLoom-macos.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SubLoom-${{ runner.os }}
+          path: |
+            SubLoom-windows-x64.zip
+            SubLoom-macos.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -lh artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/SubLoom-windows-x64.zip
+            artifacts/SubLoom-macos.zip
+          body: |
+            ## SubLoom ${{ github.ref_name }}
+
+            Cross-platform real-time speech translation captions.
+
+            - Recognition runs locally with faster-whisper.
+            - Translation uses your OpenAI-compatible cloud API and falls back to local NLLB.
+            - Models are **not** included. They download on first use into the user data directory.
+
+            Windows: unzip and run `SubLoom\SubLoom.exe`.
+            macOS: unzip and open `SubLoom.app` (unsigned build; right-click → Open).
+          fail_on_unmatched_files: false
