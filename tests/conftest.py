@@ -14,4 +14,11 @@ def isolated_app_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("SUBLOOM_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("SUBLOOM_MODEL_DIR", str(tmp_path / "models"))
     monkeypatch.delenv("SUBLOOM_API_KEY", raising=False)
+    # Tests must not depend on a developer's real saved API key.
+    try:
+        import keyring
+
+        monkeypatch.setattr(keyring, "get_password", lambda *args, **kwargs: "")
+    except Exception:
+        pass
     yield

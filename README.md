@@ -319,12 +319,20 @@ docs/           架构、macOS 音频、故障排查
 
 **`cublas64_12.dll is not found`**
 
-```powershell
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[gpu]"
-```
+先确认你运行的是哪一个版本：
 
-安装后重启应用。仅安装 `ctranslate2` 不会自动带 CUDA 运行库。
+- **`dist\SubLoom\SubLoom.exe`（CPU 安装包）不包含 CUDA 运行库**。它无法通过 pip 补装，请改用 GPU 版安装包，或直接使用源码版：
+  ```powershell
+  .\.venv\Scripts\python.exe -m subloom
+  ```
+- **源码版**才按下面的方式补装 CUDA 依赖：
+  ```powershell
+  .\.venv\Scripts\Activate.ps1
+  python -m pip install -e ".[gpu]"
+  ```
+  安装后重启应用。仅安装 `ctranslate2` 不会自动带 CUDA 运行库。
+
+如果你暂时只想先跑起来，在 **设置 → 识别 → 计算设备** 里改为“自动”或“CPU”，保存后再开始字幕。
 
 **macOS 没有系统声音**
 

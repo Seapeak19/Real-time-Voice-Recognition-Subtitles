@@ -11,7 +11,13 @@
 
 ### `cublas64_12.dll is not found` 或 `cudnn64_9.dll is not found`
 
-CTranslate2 的 PyPI wheel 不包含 CUDA 运行库。安装 GPU 额外依赖：
+**先确认版本**：如果你运行的是 `dist\SubLoom\SubLoom.exe`，这是 CPU 安装包，内部没有 CUDA 运行库，也无法通过 pip 给它补装。请改用 GPU 版安装包，或直接运行源码版：
+
+```powershell
+.\.venv\Scripts\python.exe -m subloom
+```
+
+源码版如果缺少 CUDA 运行库，再安装 GPU 额外依赖：
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
@@ -24,7 +30,7 @@ python -m pip install -e ".[gpu]"
 python scripts/check_gpu.py
 ```
 
-设置 → 识别 → GPU 应显示“CUDA 可用”。如果仍不可用，把“计算设备”改为“自动”或“CPU”，至少可以先跑起来。
+设置 → 识别 → GPU 应显示“CUDA 可用”。如果仍不可用，把“计算设备”改为“自动”或“CPU”，至少可以先跑起来。打包后的 CPU 版也可以在设置里改为“自动”或 CPU，但大模型会明显变慢。
 
 ### 首次开始一直停在“正在准备识别模型…”
 

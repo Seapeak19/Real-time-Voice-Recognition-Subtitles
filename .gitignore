@@ -45,5 +45,8 @@ samples/
 .smoke-data/
 .screenshot-data/
 .packaged-test/
+.gpu-test/
 .wheel-test/
+build-gpu/
+dist-gpu/
 docs/_crop.png

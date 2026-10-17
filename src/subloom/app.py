@@ -35,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="构建窗口后自动退出（用于 CI 检查 UI 是否可创建）",
     )
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--require-cuda", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument(
         "--config",
         type=Path,
@@ -72,10 +73,11 @@ def _set_windows_app_id() -> None:
         pass
 
 
-def _self_check() -> int:
+def _self_check(require_cuda: bool = False) -> int:
     """Import native-heavy pieces so a packaged build can be smoke tested."""
     import numpy as np
 
+    from .asr.cuda_runtime import cuda_ready
     from .audio.vad import VadSegmenter
     from .paths import resource_path
 
@@ -86,6 +88,11 @@ def _self_check() -> int:
     segmenter = VadSegmenter()
     segmenter.push(np.zeros(16_000, dtype=np.float32))
     assert resource_path("assets", "icon.png").is_file()
+    cuda_ok, cuda_reason = cuda_ready()
+    log.info("CUDA usable=%s reason=%s", cuda_ok, cuda_reason)
+    if require_cuda and not cuda_ok:
+        log.error("CUDA is required but unavailable: %s", cuda_reason)
+        return 2
     log.info("self-check ok")
     return 0
 
@@ -99,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     _set_windows_app_id()
 
     if args.self_check:
-        return _self_check()
+        return _self_check(args.require_cuda)
 
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough

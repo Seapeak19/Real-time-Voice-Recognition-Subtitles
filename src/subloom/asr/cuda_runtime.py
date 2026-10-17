@@ -182,6 +182,13 @@ def cuda_device_count() -> int:
 
 
 def install_hint() -> str:
+    if getattr(sys, "frozen", False):
+        return (
+            "当前运行的是 CPU 安装包，它不包含 CUDA 运行库。\n"
+            "请改用 GPU 版安装包，或使用源码版：\n"
+            "  python -m subloom\n"
+            "也可以在设置中把计算设备改为“自动”或 CPU。"
+        )
     return (
         "GPU 加速需要 CUDA 12 运行库。Windows 可执行：\n"
         '  pip install "subloom[gpu]"\n'
