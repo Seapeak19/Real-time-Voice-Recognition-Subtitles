@@ -22,6 +22,7 @@ from PySide6.QtGui import (
     QLinearGradient,
     QPainter,
     QPen,
+    QPixmap,
 )
 from PySide6.QtWidgets import (
     QAbstractButton,
@@ -36,6 +37,7 @@ from PySide6.QtWidgets import (
 
 from ..languages import language_name
 from ..models import CaptionSegment
+from ..paths import resource_path
 from ..subtitles import format_timestamp
 from . import theme
 
@@ -44,11 +46,25 @@ class LogoMark(QWidget):
     def __init__(self, size: int = 42, parent=None) -> None:
         super().__init__(parent)
         self._size = size
+        self._pixmap = QPixmap(str(resource_path("assets", "icon.png")))
         self.setFixedSize(size, size)
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        if not self._pixmap.isNull():
+            target = self.rect()
+            scaled = self._pixmap.scaled(
+                target.size(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+            x = (target.width() - scaled.width()) // 2
+            y = (target.height() - scaled.height()) // 2
+            painter.drawPixmap(x, y, scaled)
+            painter.end()
+            return
         rect = QRectF(0.5, 0.5, self._size - 1, self._size - 1)
         gradient = QLinearGradient(rect.topLeft(), rect.bottomRight())
         gradient.setColorAt(0, QColor(theme.ACCENT_2))

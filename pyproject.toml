@@ -46,6 +46,7 @@ dev = [
   "respx>=0.22,<1",
   "ruff>=0.6,<1",
   "pyinstaller>=6.10,<7",
+  "pillow>=10,<14",
 ]
 gpu = [
   "nvidia-cublas-cu12>=12.4,<13; sys_platform == 'win32'",
