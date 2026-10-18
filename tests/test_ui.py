@@ -98,6 +98,34 @@ def test_interface_language_can_be_saved(qtbot):
     assert dialog.config.ui.language == "en"
 
 
+def test_numeric_setting_inputs_sync_with_sliders(qtbot):
+    config = make_config()
+    dialog = SettingsDialog(config)
+    qtbot.addWidget(dialog)
+    dialog._hold_input.setValue(2400)
+    assert dialog._hold_slider.value() == 2400
+    dialog._hold_slider.setValue(2000)
+    assert dialog._hold_input.value() == 2000
+    dialog._apply()
+    assert dialog.config.overlay.hold_ms == 2000
+
+    for slider_name, input_name in (
+        ("_silence_slider", "_silence_input"),
+        ("_max_segment_slider", "_max_segment_input"),
+        ("_partial_slider", "_partial_input"),
+        ("_font_slider", "_font_input"),
+        ("_opacity_slider", "_opacity_input"),
+        ("_width_slider", "_width_input"),
+        ("_hold_slider", "_hold_input"),
+    ):
+        slider = getattr(dialog, slider_name)
+        numeric_input = getattr(dialog, input_name)
+        assert numeric_input.isEnabled()
+        assert not numeric_input.lineEdit().isReadOnly()
+        assert numeric_input.minimum() == slider.minimum()
+        assert numeric_input.maximum() == slider.maximum()
+
+
 def test_overlay_updates(qtbot):
     config = make_config()
     config.overlay.width = 600

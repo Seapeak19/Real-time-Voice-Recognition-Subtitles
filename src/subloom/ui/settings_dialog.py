@@ -88,8 +88,11 @@ class SettingsDialog(QDialog):
         root.setSpacing(14)
         title = QLabel(tr("设置"))
         title.setStyleSheet(f"font-size: 22px; font-weight: 700; color: {theme.TEXT};")
-        subtitle = QLabel(tr("调整识别、翻译与字幕显示。修改会在下次开始字幕时生效。"))
+        subtitle = QLabel(
+            tr("调整识别、翻译与字幕显示；滑杆右侧数值可直接输入。修改会在下次开始字幕时生效。")
+        )
         subtitle.setObjectName("Hint")
+        subtitle.setWordWrap(True)
         root.addWidget(title)
         root.addWidget(subtitle)
 
@@ -202,7 +205,7 @@ class SettingsDialog(QDialog):
         source_hint.setObjectName("Hint")
         form.addRow("", source_hint)
 
-        self._silence_slider, self._silence_label = self._slider_row(
+        self._silence_slider, self._silence_input = self._slider_row(
             form,
             tr("断句静音"),
             200,
@@ -211,7 +214,7 @@ class SettingsDialog(QDialog):
             " ms",
             tr("越短越实时，但句子可能被切碎。"),
         )
-        self._max_segment_slider, self._max_segment_label = self._slider_row(
+        self._max_segment_slider, self._max_segment_input = self._slider_row(
             form,
             tr("最长句长"),
             3,
@@ -220,7 +223,7 @@ class SettingsDialog(QDialog):
             " s" if tr("秒") == "s" else " 秒",
             tr("连续讲话时强制断句，避免字幕过长。"),
         )
-        self._partial_slider, self._partial_label = self._slider_row(
+        self._partial_slider, self._partial_input = self._slider_row(
             form,
             tr("局部刷新"),
             300,
@@ -255,24 +258,32 @@ class SettingsDialog(QDialog):
         value: int,
         suffix: str,
         hint: str = "",
-    ) -> tuple[QSlider, QLabel]:
+    ) -> tuple[QSlider, QSpinBox]:
         row = QHBoxLayout()
         slider = QSlider(Qt.Horizontal)
         slider.setRange(minimum, maximum)
         slider.setValue(value)
-        value_label = QLabel(f"{value}{suffix}")
-        value_label.setFixedWidth(62)
-        value_label.setStyleSheet(f"color: {theme.ACCENT}; font-weight: 600;")
-        slider.valueChanged.connect(lambda v: value_label.setText(f"{v}{suffix}"))
+        spin = QSpinBox()
+        spin.setRange(minimum, maximum)
+        spin.setValue(value)
+        spin.setSuffix(suffix)
+        spin.setFixedWidth(100)
+        spin.setAlignment(Qt.AlignRight)
+        spin.setKeyboardTracking(False)
+        spin.setToolTip(tr("可直接输入数字，按回车或失焦生效"))
+        spin.setAccessibleName(label)
+        spin.setStyleSheet(f"color: {theme.ACCENT}; font-weight: 600;")
+        slider.valueChanged.connect(spin.setValue)
+        spin.valueChanged.connect(slider.setValue)
         row.addWidget(slider, 1)
-        row.addWidget(value_label)
+        row.addWidget(spin)
         form.addRow(label, row)
         if hint:
             hint_label = QLabel(hint)
             hint_label.setObjectName("Hint")
             hint_label.setWordWrap(True)
             form.addRow("", hint_label)
-        return slider, value_label
+        return slider, spin
 
     # ------------------------------------------------------------------ translation
     def _build_translation_tab(self) -> QWidget:
@@ -416,16 +427,16 @@ class SettingsDialog(QDialog):
         )
         self._overlay_click.setChecked(self.config.overlay.click_through)
         form.addRow("", self._overlay_click)
-        self._font_slider, self._font_label = self._slider_row(
+        self._font_slider, self._font_input = self._slider_row(
             form, tr("正文字号"), 14, 48, self.config.overlay.font_size, " px"
         )
-        self._opacity_slider, self._opacity_label = self._slider_row(
+        self._opacity_slider, self._opacity_input = self._slider_row(
             form, tr("背景不透明度"), 30, 100, int(self.config.overlay.opacity * 100), " %"
         )
-        self._width_slider, self._width_label = self._slider_row(
+        self._width_slider, self._width_input = self._slider_row(
             form, tr("字幕窗宽度"), 600, 1600, self.config.overlay.width, " px"
         )
-        self._hold_slider, self._hold_label = self._slider_row(
+        self._hold_slider, self._hold_input = self._slider_row(
             form,
             tr("最短停留"),
             800,

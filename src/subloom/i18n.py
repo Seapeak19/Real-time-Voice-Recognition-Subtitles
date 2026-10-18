@@ -161,6 +161,9 @@ EN: dict[str, str] = {
 
     # ------------------------------------------------------------------ settings
     "调整识别、翻译与字幕显示。修改会在下次开始字幕时生效。": "Tune recognition, translation and subtitle display. Changes apply next time you start.",
+    "调整识别、翻译与字幕显示；滑杆右侧数值可直接输入。修改会在下次开始字幕时生效。": (
+        "Tune recognition, translation and subtitle display. The value at the right of each slider is editable. Changes apply next time you start."
+    ),
     "识别": "Recognition",
     "字幕": "Subtitles",
     "界面": "Interface",
@@ -247,6 +250,9 @@ EN: dict[str, str] = {
     "背景不透明度": "Background opacity",
     "字幕窗宽度": "Overlay width",
     "最短停留": "Minimum hold",
+    "可直接输入数字，按回车或失焦生效": (
+        "Type a number directly; press Enter or click away to apply."
+    ),
     "保证一句译文至少显示这么久，避免还没看完就被下一句替换。": (
         "Keep each translation visible at least this long so the next line cannot replace it before you finish reading."
     ),
