@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from . import APP_NAME, APP_NAME_ZH, __version__
 from .config import AppConfig, load_config
+from .i18n import set_language
 from .logging_utils import configure_logging
 from .paths import ensure_dirs
 from .ui.main_window import MainWindow, make_app_icon
@@ -125,6 +126,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:
         log.exception("Could not load config")
         config = AppConfig()
+    set_language(config.ui.language)
     window = MainWindow(config)
     window.show()
     if args.smoke_test:

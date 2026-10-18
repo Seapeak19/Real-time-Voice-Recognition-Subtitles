@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..languages import language_name
+from ..i18n import display_language, tr
 from ..models import CaptionSegment
 from ..paths import resource_path
 from ..subtitles import format_timestamp
@@ -87,7 +87,7 @@ class LogoMark(QWidget):
 
 
 class StatusPill(QFrame):
-    def __init__(self, text: str = "就绪", parent=None) -> None:
+    def __init__(self, text: str | None = None, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("StatusPill")
         self.setAttribute(Qt.WA_StyledBackground, True)
@@ -96,7 +96,7 @@ class StatusPill(QFrame):
         layout.setSpacing(6)
         self._dot = QLabel("●")
         self._dot.setStyleSheet(f"color: {theme.ACCENT}; font-size: 8px;")
-        self._label = QLabel(text)
+        self._label = QLabel(text or tr("就绪"))
         self._label.setStyleSheet(f"color: {theme.TEXT_SOFT}; font-size: 11px; font-weight: 600;")
         layout.addWidget(self._dot)
         layout.addWidget(self._label)
@@ -328,7 +328,7 @@ class CaptionCard(QFrame):
         self._translation.setStyleSheet(f"color: {theme.TEXT}; font-size: 21px; font-weight: 600;")
         layout.addWidget(self._translation)
 
-        self._pending = QLabel("翻译中…")
+        self._pending = QLabel(tr("翻译中…"))
         self._pending.setStyleSheet(f"color: {theme.DIM}; font-size: 11px;")
         layout.addWidget(self._pending)
 
@@ -342,7 +342,6 @@ class CaptionCard(QFrame):
         self._segment = segment
         self._show_source = show_source
         self._time.setText(format_timestamp(segment.start)[3:8])
-        self._language.setText(language_name(segment.source_lang))
         self._state.setText("LIVE" if not segment.is_final else "FINAL")
         self._state.setStyleSheet(
             f"color: {theme.LIVE if not segment.is_final else theme.DIM};"
@@ -357,7 +356,7 @@ class CaptionCard(QFrame):
             kind = "translation"
             pending = bool(segment.translation_pending)
         elif expected and not failed:
-            main = "正在翻译…"
+            main = tr("正在翻译…")
             kind = "placeholder"
             pending = False
         elif failed:
@@ -388,14 +387,14 @@ class CaptionCard(QFrame):
         if failed:
             text = segment.warning if len(segment.warning) <= 140 else segment.warning[:137] + "…"
             self._warning.setText("⚠ " + text)
-        language = language_name(segment.source_lang)
+        language = display_language(segment.source_lang)
         if (
             not translated
             and not expected
             and segment.target_lang
             and segment.target_lang != segment.source_lang
         ):
-            language += " · 原文"
+            language += " · " + tr("原文")
         self._language.setText(language)
         self.setProperty("partial", not segment.is_final)
         self.style().unpolish(self)
@@ -410,12 +409,14 @@ class EmptyState(QWidget):
         layout.addStretch(1)
         self._mark = WaveMark(76)
         layout.addWidget(self._mark, 0, Qt.AlignHCenter)
-        title = QLabel("声音会在这里变成字幕")
+        title = QLabel(tr("声音会在这里变成字幕"))
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet(f"color: {theme.TEXT}; font-size: 20px; font-weight: 700;")
         subtitle = QLabel(
-            "选择系统声音、麦克风或一个媒体文件，点击「开始字幕」。\n"
-            "识别在本机完成，翻译可走云端或本地模型。"
+            tr(
+                "选择系统声音、麦克风或一个媒体文件，点击「开始字幕」。\n"
+                "识别在本机完成，翻译可走云端或本地模型。"
+            )
         )
         subtitle.setAlignment(Qt.AlignCenter)
         subtitle.setWordWrap(True)

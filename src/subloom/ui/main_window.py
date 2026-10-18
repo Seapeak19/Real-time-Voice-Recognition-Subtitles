@@ -33,7 +33,7 @@ from ..asr.cuda_runtime import cuda_device_count, cuda_ready, install_hint
 from ..asr.whisper_engine import resolve_device, resolve_model
 from ..audio.devices import list_microphones, list_system_devices, system_audio_hint
 from ..config import AppConfig, save_config
-from ..languages import language_name
+from ..i18n import display_language, language_choice_label, tr
 from ..models import CaptionSegment
 from ..pipeline import CaptionPipeline, PipelineCallbacks
 from ..transcript import TranscriptStore
@@ -98,7 +98,7 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ build
     def _build_ui(self) -> None:
-        self.setWindowTitle(f"{APP_NAME}  {APP_NAME_ZH}  —  实时语音翻译字幕")
+        self.setWindowTitle(f"{APP_NAME}  {APP_NAME_ZH}  —  {tr('实时语音翻译字幕')}")
         self.setMinimumSize(1040, 700)
         screen = self.screen()
         width, height = 1210, 790
@@ -145,19 +145,19 @@ class MainWindow(QMainWindow):
         title_row.addWidget(title)
         title_row.addWidget(zh)
         title_row.addStretch(1)
-        tagline = QLabel("实时语音 · 自动识别 · 即时翻译")
+        tagline = QLabel(tr("实时语音 · 自动识别 · 即时翻译"))
         tagline.setObjectName("Tagline")
         title_box.addLayout(title_row)
         title_box.addWidget(tagline)
         layout.addLayout(title_box)
         layout.addStretch(1)
-        self._status_pill = StatusPill("就绪")
+        self._status_pill = StatusPill(tr("就绪"))
         layout.addWidget(self._status_pill)
-        help_btn = QPushButton("快速开始")
+        help_btn = QPushButton(tr("快速开始"))
         help_btn.setObjectName("GhostButton")
         help_btn.clicked.connect(self._show_help)
         layout.addWidget(help_btn)
-        self._settings_btn = QPushButton("设置")
+        self._settings_btn = QPushButton(tr("设置"))
         self._settings_btn.setObjectName("SecondaryButton")
         self._settings_btn.clicked.connect(self._open_settings)
         layout.addWidget(self._settings_btn)
@@ -171,9 +171,13 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(20, 20, 20, 18)
         layout.setSpacing(11)
 
-        layout.addWidget(self._section_label("音频来源"))
+        layout.addWidget(self._section_label(tr("音频来源")))
         self._source_segment = SegmentedControl(
-            (("system", "系统声音"), ("microphone", "麦克风"), ("file", "文件"))
+            (
+                ("system", tr("系统声音")),
+                ("microphone", tr("麦克风")),
+                ("file", tr("文件")),
+            )
         )
         self._source_segment.changed.connect(self._on_source_changed)
         layout.addWidget(self._source_segment)
@@ -188,10 +192,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._source_stack)
         layout.addSpacing(3)
 
-        layout.addWidget(self._section_label("翻译"))
+        layout.addWidget(self._section_label(tr("翻译")))
         target_row = QHBoxLayout()
         target_row.setContentsMargins(0, 0, 0, 0)
-        target_label = QLabel("目标语言")
+        target_label = QLabel(tr("目标语言"))
         target_label.setObjectName("Hint")
         target_label.setFixedWidth(58)
         self._target_combo = QComboBox()
@@ -203,14 +207,14 @@ class MainWindow(QMainWindow):
         layout.addLayout(target_row)
 
         provider_row = QHBoxLayout()
-        provider_label = QLabel("翻译方式")
+        provider_label = QLabel(tr("翻译方式"))
         provider_label.setObjectName("Hint")
         provider_label.setFixedWidth(58)
         self._provider_combo = QComboBox()
-        self._provider_combo.addItem("自动选择", "auto")
-        self._provider_combo.addItem("云端 API", "cloud")
-        self._provider_combo.addItem("本地模型", "local")
-        self._provider_combo.addItem("仅显示原文", "off")
+        self._provider_combo.addItem(tr("自动选择"), "auto")
+        self._provider_combo.addItem(tr("云端 API"), "cloud")
+        self._provider_combo.addItem(tr("本地模型"), "local")
+        self._provider_combo.addItem(tr("仅显示原文"), "off")
         self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
         provider_row.addWidget(provider_label)
         provider_row.addWidget(self._provider_combo, 1)
@@ -221,14 +225,14 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._engine_hint)
 
         layout.addSpacing(4)
-        self._start_btn = QPushButton("开始字幕")
+        self._start_btn = QPushButton(tr("开始字幕"))
         self._start_btn.setObjectName("PrimaryButton")
         self._start_btn.setCursor(Qt.PointingHandCursor)
         self._start_btn.clicked.connect(self._toggle_session)
         layout.addWidget(self._start_btn)
 
         level_row = QHBoxLayout()
-        level_label = QLabel("输入电平")
+        level_label = QLabel(tr("输入电平"))
         level_label.setObjectName("Hint")
         level_label.setFixedWidth(58)
         self._level_meter = LevelMeter()
@@ -243,9 +247,9 @@ class MainWindow(QMainWindow):
         overlay_layout.setSpacing(10)
         overlay_text = QVBoxLayout()
         overlay_text.setSpacing(2)
-        overlay_title = QLabel("悬浮字幕")
+        overlay_title = QLabel(tr("悬浮字幕"))
         overlay_title.setStyleSheet(f"color: {theme.TEXT}; font-weight: 600; font-size: 12px;")
-        overlay_hint = QLabel("置顶显示，可拖动")
+        overlay_hint = QLabel(tr("置顶显示，可拖动"))
         overlay_hint.setObjectName("Hint")
         overlay_text.addWidget(overlay_title)
         overlay_text.addWidget(overlay_hint)
@@ -256,7 +260,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(overlay_card)
         layout.addStretch(1)
 
-        footer = QLabel(f"本地识别 · {resolve_model(self.config.asr)}")
+        footer = QLabel(tr("本地识别 · {model}", model=resolve_model(self.config.asr)))
         footer.setObjectName("Mono")
         footer.setWordWrap(True)
         layout.addWidget(footer)
@@ -271,7 +275,7 @@ class MainWindow(QMainWindow):
         row = QHBoxLayout()
         self._system_combo = QComboBox()
         self._system_combo.currentIndexChanged.connect(self._on_device_changed)
-        refresh = QPushButton("刷新")
+        refresh = QPushButton(tr("刷新"))
         refresh.setObjectName("GhostButton")
         refresh.clicked.connect(self._reload_devices)
         row.addWidget(self._system_combo, 1)
@@ -291,13 +295,13 @@ class MainWindow(QMainWindow):
         row = QHBoxLayout()
         self._mic_combo = QComboBox()
         self._mic_combo.currentIndexChanged.connect(self._on_device_changed)
-        refresh = QPushButton("刷新")
+        refresh = QPushButton(tr("刷新"))
         refresh.setObjectName("GhostButton")
         refresh.clicked.connect(self._reload_devices)
         row.addWidget(self._mic_combo, 1)
         row.addWidget(refresh)
         layout.addLayout(row)
-        hint = QLabel("适合现场讲话、会议发言和课堂。")
+        hint = QLabel(tr("适合现场讲话、会议发言和课堂。"))
         hint.setObjectName("Hint")
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -310,15 +314,15 @@ class MainWindow(QMainWindow):
         layout.setSpacing(6)
         row = QHBoxLayout()
         self._file_edit = QLineEdit()
-        self._file_edit.setPlaceholderText("选择音频或视频文件…")
+        self._file_edit.setPlaceholderText(tr("选择音频或视频文件…"))
         self._file_edit.setReadOnly(True)
-        browse = QPushButton("浏览")
+        browse = QPushButton(tr("浏览"))
         browse.setObjectName("SecondaryButton")
         browse.clicked.connect(self._browse_file)
         row.addWidget(self._file_edit, 1)
         row.addWidget(browse)
         layout.addLayout(row)
-        hint = QLabel("按原速播放并生成字幕；支持 WAV / MP3 / M4A / MP4 / MKV 等。")
+        hint = QLabel(tr("按原速播放并生成字幕；支持 WAV / MP3 / M4A / MP4 / MKV 等。"))
         hint.setObjectName("Hint")
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -332,10 +336,10 @@ class MainWindow(QMainWindow):
         layout.setSpacing(10)
 
         top = QHBoxLayout()
-        title = QLabel("实时字幕")
+        title = QLabel(tr("实时字幕"))
         title.setStyleSheet(f"color: {theme.TEXT}; font-size: 16px; font-weight: 700;")
         top.addWidget(title)
-        self._detected_label = QLabel("等待音频")
+        self._detected_label = QLabel(tr("等待音频"))
         self._detected_label.setStyleSheet(
             f"color: {theme.MUTED}; font-size: 10px; background: {theme.BG};"
             " border-radius: 6px; padding: 3px 7px;"
@@ -345,11 +349,11 @@ class MainWindow(QMainWindow):
         self._provider_label.setStyleSheet(f"color: {theme.DIM}; font-size: 10px;")
         top.addWidget(self._provider_label)
         top.addStretch(1)
-        self._export_btn = QPushButton("导出")
+        self._export_btn = QPushButton(tr("导出"))
         self._export_btn.setObjectName("SecondaryButton")
         self._export_btn.setEnabled(False)
         self._export_btn.clicked.connect(self._export_menu)
-        self._clear_btn = QPushButton("清空")
+        self._clear_btn = QPushButton(tr("清空"))
         self._clear_btn.setObjectName("GhostButton")
         self._clear_btn.clicked.connect(self._clear_captions)
         top.addWidget(self._export_btn)
@@ -390,11 +394,11 @@ class MainWindow(QMainWindow):
 
         footer = QHBoxLayout()
         footer.setSpacing(10)
-        self._status_text = QLabel("就绪")
+        self._status_text = QLabel(tr("就绪"))
         self._status_text.setObjectName("Mono")
         self._elapsed_label = QLabel("00:00")
         self._elapsed_label.setObjectName("Mono")
-        self._stats_label = QLabel("0 句")
+        self._stats_label = QLabel(tr("0 句"))
         self._stats_label.setObjectName("Mono")
         self._model_badge = QLabel("")
         self._model_badge.setStyleSheet(
@@ -453,7 +457,7 @@ class MainWindow(QMainWindow):
         from ..languages import TARGET_LANGUAGES
 
         for lang in TARGET_LANGUAGES:
-            self._target_combo.addItem(lang.name_zh, lang.code)
+            self._target_combo.addItem(language_choice_label(lang.code), lang.code)
             self._target_combo.setItemData(
                 self._target_combo.count() - 1,
                 f"{lang.name_zh}  ·  {lang.name_en}",
@@ -479,20 +483,20 @@ class MainWindow(QMainWindow):
             index = self._system_combo.findData(wanted)
             self._system_combo.setCurrentIndex(index if index >= 0 else 0)
         else:
-            self._system_combo.addItem("未检测到系统音频设备", "__missing__")
+            self._system_combo.addItem(tr("未检测到系统音频设备"), "__missing__")
         self._system_combo.blockSignals(False)
 
         self._mic_combo.blockSignals(True)
         self._mic_combo.clear()
         if mic_devices:
             for device in mic_devices:
-                label = device.name + ("  · 默认" if device.is_default else "")
+                label = device.name + ("  · " + tr("默认") if device.is_default else "")
                 self._mic_combo.addItem(label, device.id)
             wanted = self.config.audio.microphone_device or current_mic
             index = self._mic_combo.findData(wanted)
             self._mic_combo.setCurrentIndex(index if index >= 0 else 0)
         else:
-            self._mic_combo.addItem("未检测到麦克风", "__missing__")
+            self._mic_combo.addItem(tr("未检测到麦克风"), "__missing__")
         self._mic_combo.blockSignals(False)
 
         if self.config.audio.source == "system" and self._system_combo.currentData() not in (None, "__missing__"):
@@ -534,10 +538,10 @@ class MainWindow(QMainWindow):
             self._engine_hint.setStyleSheet(f"color: {theme.WARN}; font-size: 11px;")
         self._provider_label.setText(
             {
-                "cloud": "云端翻译",
-                "local": "本地翻译",
-                "off": "仅原文",
-                "none": "未配置翻译",
+                "cloud": tr("云端翻译"),
+                "local": tr("本地翻译"),
+                "off": tr("仅原文"),
+                "none": tr("未配置翻译"),
             }.get(readiness.provider, "")
         )
 
@@ -551,16 +555,16 @@ class MainWindow(QMainWindow):
         devices = cuda_device_count()
         if device == "cuda":
             label = "GPU"
-            tooltip = "NVIDIA CUDA 加速已启用"
+            tooltip = tr("NVIDIA CUDA 加速已启用")
         elif devices > 0 and not ready:
-            label = "CPU · CUDA 缺失"
+            label = tr("CPU · CUDA 缺失")
             tooltip = f"{reason}\n\n{install_hint()}"
         else:
             label = "CPU"
-            tooltip = "未使用 GPU 加速"
+            tooltip = tr("未使用 GPU 加速")
         self._model_badge.setText(f"{model} · {label}")
         self._model_badge.setToolTip(tooltip)
-        self._side_footer.setText(f"本地识别 · {model} · {label}")
+        self._side_footer.setText(tr("本地识别 · {model} · {device}", model=model, device=label))
         self._side_footer.setToolTip(tooltip)
 
     # ------------------------------------------------------------------ sources
@@ -579,9 +583,9 @@ class MainWindow(QMainWindow):
         start = str(self._selected_file.parent) if self._selected_file else ""
         filename, _ = QFileDialog.getOpenFileName(
             self,
-            "选择要生成字幕的媒体文件",
+            tr("选择要生成字幕的媒体文件"),
             start,
-            "媒体文件 (*.wav *.mp3 *.m4a *.aac *.flac *.ogg *.opus *.mp4 *.mkv *.mov *.webm);;所有文件 (*.*)",
+            tr("媒体文件 (*.wav *.mp3 *.m4a *.aac *.flac *.ogg *.opus *.mp4 *.mkv *.mov *.webm);;所有文件 (*.*)"),
         )
         if filename:
             self._selected_file = Path(filename)
@@ -602,9 +606,11 @@ class MainWindow(QMainWindow):
         if not code:
             return
         if probability and probability > 0:
-            self._detected_label.setText(f"{language_name(code)} · {probability * 100:.0f}%")
+            self._detected_label.setText(
+                tr("{language} · {probability}%", language=display_language(code), probability=f"{probability * 100:.0f}")
+            )
         else:
-            self._detected_label.setText(language_name(code))
+            self._detected_label.setText(display_language(code))
 
     def _on_level(self, db: float) -> None:
         self._level_meter.set_level(db)
@@ -628,7 +634,7 @@ class MainWindow(QMainWindow):
         if checked:
             self._overlay.apply_config(self.config.overlay)
             if not self._running:
-                self._overlay.set_session_hint("字幕窗已就绪，开始后显示字幕")
+                self._overlay.set_session_hint(tr("字幕窗已就绪，开始后显示字幕"))
             self._overlay.show_overlay()
         else:
             self._overlay.hide()
@@ -674,13 +680,13 @@ class MainWindow(QMainWindow):
         source = self._source_segment.value
         if source == "system":
             if self._system_combo.currentData() in (None, "__missing__"):
-                return "没有检测到系统音频设备。\n\n" + system_audio_hint()
+                return tr("没有检测到系统音频设备。\n\n") + system_audio_hint()
         elif source == "microphone":
             if self._mic_combo.currentData() in (None, "__missing__"):
-                return "没有检测到麦克风。请连接设备后点击“刷新”。"
+                return tr("没有检测到麦克风。请连接设备后点击“刷新”。")
         elif source == "file":
             if self._selected_file is None or not self._selected_file.is_file():
-                return "请先选择要生成字幕的音视频文件。"
+                return tr("请先选择要生成字幕的音视频文件。")
         return None
 
     def _start_session(self) -> None:
@@ -688,7 +694,7 @@ class MainWindow(QMainWindow):
             return
         error = self._validate_source()
         if error:
-            QMessageBox.warning(self, "无法开始", error)
+            QMessageBox.warning(self, tr("无法开始"), error)
             return
         self._sync_config_from_ui()
         if self._pipeline is None:
@@ -704,8 +710,8 @@ class MainWindow(QMainWindow):
                 self._pipeline = CaptionPipeline(self.config, callbacks)
             except Exception as exc:
                 log.exception("Could not construct pipeline")
-                QMessageBox.critical(self, "初始化失败", str(exc))
-                self._status_pill.set_state("error", "初始化失败")
+                QMessageBox.critical(self, tr("初始化失败"), str(exc))
+                self._status_pill.set_state("error", tr("初始化失败"))
                 self._status_text.setText(str(exc))
                 return
         readiness = self._pipeline.readiness()
@@ -722,10 +728,10 @@ class MainWindow(QMainWindow):
         self._clear_captions(silent=True)
         self._session_started = time.monotonic()
         self._elapsed_label.setText("00:00")
-        self._status_pill.set_state("loading", "启动中")
-        self._status_text.setText("正在准备…")
+        self._status_pill.set_state("loading", tr("启动中"))
+        self._status_text.setText(tr("正在准备…"))
         self._provider_label.setText("")
-        self._detected_label.setText("等待音频")
+        self._detected_label.setText(tr("等待音频"))
         self._error_banner.hide()
         try:
             self._pipeline.start(
@@ -734,8 +740,8 @@ class MainWindow(QMainWindow):
             )
         except Exception as exc:
             log.exception("Could not start pipeline")
-            QMessageBox.critical(self, "启动失败", str(exc))
-            self._status_pill.set_state("error", "启动失败")
+            QMessageBox.critical(self, tr("启动失败"), str(exc))
+            self._status_pill.set_state("error", tr("启动失败"))
             self._status_text.setText(str(exc))
             return
         self._overlay.clear()
@@ -747,16 +753,18 @@ class MainWindow(QMainWindow):
 
     def _ask_translation_setup(self, readiness: Readiness) -> str:
         box = QMessageBox(self)
-        box.setWindowTitle("翻译服务尚未就绪")
+        box.setWindowTitle(tr("翻译服务尚未就绪"))
         box.setIcon(QMessageBox.Information)
-        box.setText("现在还没有可用的翻译服务。")
+        box.setText(tr("现在还没有可用的翻译服务。"))
         box.setInformativeText(
-            f"{readiness.message}\n\n"
-            "你可以先配置云端 API 或下载本地模型，也可以先只显示识别原文。"
+            tr(
+                "{message}\n\n你可以先配置云端 API 或下载本地模型，也可以先只显示识别原文。",
+                message=readiness.message,
+            )
         )
-        settings_btn = box.addButton("配置翻译", QMessageBox.AcceptRole)
-        source_btn = box.addButton("仅显示原文", QMessageBox.ActionRole)
-        box.addButton("取消", QMessageBox.RejectRole)
+        settings_btn = box.addButton(tr("配置翻译"), QMessageBox.AcceptRole)
+        source_btn = box.addButton(tr("仅显示原文"), QMessageBox.ActionRole)
+        box.addButton(tr("取消"), QMessageBox.RejectRole)
         box.exec()
         clicked = box.clickedButton()
         if clicked is settings_btn:
@@ -770,9 +778,9 @@ class MainWindow(QMainWindow):
             return
         self._stopping = True
         self._start_btn.setEnabled(False)
-        self._start_btn.setText("正在停止…")
-        self._status_pill.set_state("loading", "停止中")
-        self._status_text.setText("正在停止…")
+        self._start_btn.setText(tr("正在停止…"))
+        self._status_pill.set_state("loading", tr("停止中"))
+        self._status_text.setText(tr("正在停止…"))
 
         def worker() -> None:
             try:
@@ -785,7 +793,9 @@ class MainWindow(QMainWindow):
     def _set_running(self, running: bool) -> None:
         self._running = running
         self._start_btn.setEnabled(not self._stopping)
-        self._start_btn.setText("停止字幕" if running else ("正在停止…" if self._stopping else "开始字幕"))
+        self._start_btn.setText(
+            tr("停止字幕") if running else (tr("正在停止…") if self._stopping else tr("开始字幕"))
+        )
         self._start_btn.setProperty("running", running)
         self._start_btn.style().unpolish(self._start_btn)
         self._start_btn.style().polish(self._start_btn)
@@ -805,34 +815,37 @@ class MainWindow(QMainWindow):
             return
         self._stopping = False
         self._set_running(False)
-        self._status_pill.set_state("ready", "就绪")
-        self._status_text.setText("已停止")
+        self._status_pill.set_state("ready", tr("就绪"))
+        self._status_text.setText(tr("已停止"))
         self._start_btn.setEnabled(True)
         self._update_stats()
         self._export_btn.setEnabled(bool(self.transcript.finals))
         if self.config.overlay.enabled:
-            self._overlay.set_session_hint("字幕已停止")
+            self._overlay.set_session_hint(tr("字幕已停止"))
 
     def _on_status(self, message: str) -> None:
         self._status_text.setText(message)
         if not self._running:
             return
-        if any(token in message for token in ("准备", "加载", "下载", "启动", "完成最后")):
-            self._status_pill.set_state("loading", "准备中")
-        elif "聆听" in message:
-            self._status_pill.set_state("listening", "聆听中")
-        elif "停止" in message:
-            self._status_pill.set_state("ready", "停止中")
+        if any(
+            token in message
+            for token in ("准备", "加载", "下载", "启动", "完成最后", "Preparing", "Loading", "Downloading", "Starting", "Finishing")
+        ):
+            self._status_pill.set_state("loading", tr("准备中"))
+        elif any(token in message for token in ("聆听", "Listening")):
+            self._status_pill.set_state("listening", tr("聆听中"))
+        elif any(token in message for token in ("停止", "Stopping")):
+            self._status_pill.set_state("ready", tr("停止中"))
 
     def _on_error(self, message: str) -> None:
         self._error_label.setText(message)
         self._error_banner.show()
         self._error_timer.start(12000)
-        self._status_pill.set_state("error", "发生错误")
+        self._status_pill.set_state("error", tr("发生错误"))
         self._status_text.setText(message.splitlines()[0][:120])
         self._stopping = True
         self._start_btn.setEnabled(False)
-        self._start_btn.setText("正在停止…")
+        self._start_btn.setText(tr("正在停止…"))
 
     def _on_segment(self, segment: CaptionSegment) -> None:
         stored = self.transcript.upsert(segment)
@@ -840,17 +853,17 @@ class MainWindow(QMainWindow):
         if self.config.overlay.enabled:
             self._overlay.set_segment(stored)
         self._export_btn.setEnabled(bool(self.transcript.finals))
-        self._stats_label.setText(f"{len(self.transcript.finals)} 句")
+        self._stats_label.setText(tr("{count} 句", count=len(self.transcript.finals)))
         if stored.source_lang:
-            self._detected_label.setText(language_name(stored.source_lang))
+            self._detected_label.setText(display_language(stored.source_lang))
         if stored.provider:
             self._provider_label.setText(
-                {"cloud": "云端翻译", "local": "本地翻译"}.get(stored.provider, "")
+                {"cloud": tr("云端翻译"), "local": tr("本地翻译")}.get(stored.provider, "")
             )
         if stored.is_final:
-            self._status_text.setText("已识别一句，继续聆听…")
+            self._status_text.setText(tr("已识别一句，继续聆听…"))
         elif stored.translation_pending:
-            self._status_text.setText("翻译中…")
+            self._status_text.setText(tr("翻译中…"))
 
     def _render_segment(self, segment: CaptionSegment) -> None:
         card = self._cards.get(segment.id)
@@ -885,8 +898,8 @@ class MainWindow(QMainWindow):
         if not silent and self.transcript.finals:
             answer = QMessageBox.question(
                 self,
-                "清空字幕",
-                "确定清空当前字幕吗？已导出的文件不会受影响。",
+                tr("清空字幕"),
+                tr("确定清空当前字幕吗？已导出的文件不会受影响。"),
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
             )
@@ -899,10 +912,10 @@ class MainWindow(QMainWindow):
         self._cards.clear()
         self._empty.show()
         self._export_btn.setEnabled(False)
-        self._stats_label.setText("0 句")
+        self._stats_label.setText(tr("0 句"))
         if not self._running:
             self._overlay.clear()
-        self._status_text.setText("就绪")
+        self._status_text.setText(tr("就绪"))
 
     def _update_stats(self) -> None:
         if self._session_started is None:
@@ -910,17 +923,17 @@ class MainWindow(QMainWindow):
         if self._running:
             elapsed = int(time.monotonic() - self._session_started)
             self._elapsed_label.setText(f"{elapsed // 60:02d}:{elapsed % 60:02d}")
-        self._stats_label.setText(f"{len(self.transcript.finals)} 句")
+        self._stats_label.setText(tr("{count} 句", count=len(self.transcript.finals)))
 
     # ------------------------------------------------------------------ actions
     def _export_menu(self) -> None:
         if not self.transcript.finals:
-            QMessageBox.information(self, "导出", "还没有已完成识别和翻译的句子。")
+            QMessageBox.information(self, tr("导出"), tr("还没有已完成识别和翻译的句子。"))
             return
         menu = QMenu(self)
-        translated = menu.addAction("导出译文 SRT")
-        bilingual = menu.addAction("导出双语 SRT")
-        menu.addAction("导出纯文本")
+        translated = menu.addAction(tr("导出译文 SRT"))
+        bilingual = menu.addAction(tr("导出双语 SRT"))
+        menu.addAction(tr("导出纯文本"))
         action = menu.exec(self._export_btn.mapToGlobal(QPoint(0, self._export_btn.height() + 4)))
         if action is None:
             return
@@ -938,9 +951,9 @@ class MainWindow(QMainWindow):
         suggested = str(Path(docs) / f"subloom-{stamp}.{suffix}")
         filename, _ = QFileDialog.getSaveFileName(
             self,
-            "导出字幕",
+            tr("导出字幕"),
             suggested,
-            "SRT 字幕 (*.srt)" if kind == "srt" else "文本文件 (*.txt)",
+            tr("SRT 字幕 (*.srt)") if kind == "srt" else tr("文本文件 (*.txt)"),
         )
         if not filename:
             return
@@ -954,15 +967,16 @@ class MainWindow(QMainWindow):
                     self.transcript.text(bilingual=bilingual), encoding="utf-8-sig"
                 )
         except OSError as exc:
-            QMessageBox.warning(self, "导出失败", str(exc))
+            QMessageBox.warning(self, tr("导出失败"), str(exc))
             return
-        self._status_text.setText(f"已导出：{Path(filename).name}")
-        self._status_pill.set_state("ready", "已导出")
+        self._status_text.setText(tr("已导出：{name}", name=Path(filename).name))
+        self._status_pill.set_state("ready", tr("已导出"))
 
     def _open_settings(self) -> None:
         if self._running or self._stopping:
-            QMessageBox.information(self, "请先停止", "请先停止当前字幕，再修改设置。")
+            QMessageBox.information(self, tr("请先停止"), tr("请先停止当前字幕，再修改设置。"))
             return
+        previous_language = self.config.ui.language
         dialog = SettingsDialog(self.config, self)
         if dialog.exec() != SettingsDialog.Accepted:
             return
@@ -983,16 +997,24 @@ class MainWindow(QMainWindow):
                 self._overlay.show_overlay()
         else:
             self._overlay.hide()
+        if self.config.ui.language != previous_language:
+            QMessageBox.information(
+                self,
+                tr("界面语言已保存"),
+                tr("重启 SubLoom 后，新的界面语言会生效。"),
+            )
 
     def _show_help(self) -> None:
         QMessageBox.information(
             self,
-            "快速开始",
-            "1. 选择音频来源：系统声音、麦克风或一个媒体文件。\n\n"
-            "2. 选择目标语言和翻译方式。推荐先配置云端 API；没有 API 时可下载本地 NLLB 模型。\n\n"
-            "3. 点击「开始字幕」。识别在本机完成，悬浮字幕窗会置顶显示翻译。\n\n"
-            "4. 结束后点击「导出」保存 SRT 或纯文本。\n\n"
-            "提示：首次使用需要下载识别模型；模型保存在用户数据目录，不会进入 Git 仓库。",
+            tr("快速开始"),
+            tr(
+                "1. 选择音频来源：系统声音、麦克风或一个媒体文件。\n\n"
+                "2. 选择目标语言和翻译方式。推荐先配置云端 API；没有 API 时可下载本地 NLLB 模型。\n\n"
+                "3. 点击「开始字幕」。识别在本机完成，悬浮字幕窗会置顶显示翻译。\n\n"
+                "4. 结束后点击「导出」保存 SRT 或纯文本。\n\n"
+                "提示：首次使用需要下载识别模型；模型保存在用户数据目录，不会进入 Git 仓库。"
+            ),
         )
 
     def _maybe_first_run(self) -> None:
@@ -1003,7 +1025,7 @@ class MainWindow(QMainWindow):
             save_config(self.config)
         except OSError:
             pass
-        self._status_text.setText("首次使用：建议先在「设置 → 翻译」中配置服务")
+        self._status_text.setText(tr("首次使用：建议先在「设置 → 翻译」中配置服务"))
 
     # ------------------------------------------------------------------ geometry
     def _restore_geometry(self) -> None:
@@ -1023,8 +1045,8 @@ class MainWindow(QMainWindow):
         if self._running or self._stopping:
             answer = QMessageBox.question(
                 self,
-                "退出 SubLoom",
-                "字幕仍在运行，确定要退出吗？",
+                tr("退出 SubLoom"),
+                tr("字幕仍在运行，确定要退出吗？"),
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
             )

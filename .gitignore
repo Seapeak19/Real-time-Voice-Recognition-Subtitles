@@ -53,3 +53,4 @@ build-new/
 dist-new/
 docs/_crop.png
 docs/_icon-preview.png
+docs/_*.png

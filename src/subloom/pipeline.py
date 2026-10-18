@@ -19,6 +19,7 @@ from .asr import LanguageTracker, WhisperASR
 from .audio.capture import AudioSource, create_source
 from .audio.vad import VadEvent, VadSegmenter
 from .config import AppConfig
+from .i18n import tr
 from .languages import from_whisper, normalize_code, whisper_code
 from .models import CaptionSegment, ModelNotReadyError
 from .translate import Readiness, TranslationService
@@ -164,7 +165,7 @@ class CaptionPipeline:
             self._dropped_seconds += dropped / 16_000.0
             if time.monotonic() - self._last_drop_status > 4.0:
                 self._last_drop_status = time.monotonic()
-                self._status("识别速度暂时落后，已丢弃少量旧音频")
+                self._status(tr("识别速度暂时落后，已丢弃少量旧音频"))
 
     def _on_source_error(self, message: str) -> None:
         self._fail(message)
@@ -179,13 +180,13 @@ class CaptionPipeline:
             if self._stop_event.is_set():
                 return
             if self._translation_enabled and self.selected_provider == "local":
-                self._status("正在准备本地翻译模型…")
+                self._status(tr("正在准备本地翻译模型…"))
                 self.translator.warm_local(self._status)
-            self._status("正在准备识别模型…")
+            self._status(tr("正在准备识别模型…"))
             self.asr.load(self._status)
             if self._stop_event.is_set():
                 return
-            self._status("正在启动音频…")
+            self._status(tr("正在启动音频…"))
             source = create_source(
                 self.config.audio.source,
                 on_audio=self._on_audio,
@@ -200,7 +201,7 @@ class CaptionPipeline:
             self._source = source
             source.start()
             self._started_at = time.monotonic()
-            self._status("正在聆听…")
+            self._status(tr("正在聆听…"))
             while not self._stop_event.is_set():
                 if self._source_finished.is_set() and self._queue.empty():
                     break
@@ -230,7 +231,7 @@ class CaptionPipeline:
             events = self._vad.push(chunk)
         except Exception as exc:
             log.exception("VAD failure")
-            self._fail(f"音频分段失败：{exc}")
+            self._fail(tr("音频分段失败：{error}", error=exc))
             return
         for event in events:
             try:
@@ -240,7 +241,7 @@ class CaptionPipeline:
                     self._handle_final(event)
             except Exception as exc:
                 log.exception("Recognition failure")
-                self._status(f"这一句识别失败：{exc}")
+                self._status(tr("这一句识别失败：{error}", error=exc))
 
     @property
     def _vad(self) -> VadSegmenter:
@@ -257,7 +258,7 @@ class CaptionPipeline:
                 self._handle_final(event)
             except Exception as exc:
                 log.exception("Final transcription failed")
-                self._status(f"最后一句识别失败：{exc}")
+                self._status(tr("最后一句识别失败：{error}", error=exc))
 
     def _asr_language(self) -> str | None:
         locked = self.tracker.locked
@@ -479,7 +480,7 @@ class CaptionPipeline:
             partial.shutdown(wait=False, cancel_futures=True)
         if final is not None:
             if self._translation_enabled:
-                self._status("正在完成最后一句翻译…")
+                self._status(tr("正在完成最后一句翻译…"))
             final.shutdown(wait=True)
 
     def _finish(self) -> None:

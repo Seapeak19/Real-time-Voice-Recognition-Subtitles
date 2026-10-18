@@ -10,6 +10,7 @@ from pathlib import Path
 
 from ..asr.cuda_runtime import cuda_ready
 from ..config import LocalTranslationConfig
+from ..i18n import tr
 from ..languages import nllb_code
 from ..models import ModelNotReadyError, TranslationError, UnknownLanguageError
 from ..paths import models_dir
@@ -51,7 +52,7 @@ def download_local_model(progress=None, config: LocalTranslationConfig | None = 
         return target
     target.mkdir(parents=True, exist_ok=True)
     if progress:
-        progress(f"正在下载本地翻译模型（{NLLB_SIZE_HINT}）…")
+        progress(tr("正在下载本地翻译模型（{size}）…", size=NLLB_SIZE_HINT))
     try:
         from huggingface_hub import snapshot_download
 
@@ -61,11 +62,11 @@ def download_local_model(progress=None, config: LocalTranslationConfig | None = 
             allow_patterns=list(NLLB_FILES),
         )
     except Exception as exc:
-        raise ModelNotReadyError(f"本地翻译模型下载失败：{exc}") from exc
+        raise ModelNotReadyError(tr("本地翻译模型下载失败：{error}", error=exc)) from exc
     if not local_model_available(config):
-        raise ModelNotReadyError("模型下载完成，但文件不完整，请重试。")
+        raise ModelNotReadyError(tr("模型下载完成，但文件不完整，请重试。"))
     if progress:
-        progress("本地翻译模型已就绪。")
+        progress(tr("本地翻译模型已就绪。"))
     return target
 
 
@@ -94,8 +95,12 @@ class NLLBTranslator(Translator):
 
     def status(self) -> tuple[bool, str]:
         if self.available:
-            return True, f"NLLB-200 600M · 已下载（{NLLB_SIZE_HINT}）"
-        return False, f"NLLB-200 600M · 未下载（{NLLB_SIZE_HINT}，{NLLB_LICENSE}）"
+            return True, tr("NLLB-200 600M · 已下载（{size}）", size=NLLB_SIZE_HINT)
+        return False, tr(
+            "NLLB-200 600M · 未下载（{size}，{license}）",
+            size=NLLB_SIZE_HINT,
+            license=NLLB_LICENSE,
+        )
 
     def _resolve_runtime(self) -> tuple[str, str]:
         device = "cuda" if cuda_ready()[0] else "cpu"
@@ -109,12 +114,18 @@ class NLLBTranslator(Translator):
                 return
             if not self.available:
                 raise ModelNotReadyError(
-                    "本地翻译模型尚未下载。\n请在设置中下载 NLLB 模型，或配置云端翻译 API。"
+                    tr("本地翻译模型尚未下载。\n请在设置中下载 NLLB 模型，或配置云端翻译 API。")
                 )
             target = local_model_dir(self.config)
             device, compute_type = self._resolve_runtime()
             if progress:
-                progress(f"正在加载本地翻译模型（{device} / {compute_type}）…")
+                progress(
+                    tr(
+                        "正在加载本地翻译模型（{device} / {compute}）…",
+                        device=device,
+                        compute=compute_type,
+                    )
+                )
             try:
                 import ctranslate2
                 import sentencepiece
@@ -152,9 +163,13 @@ class NLLBTranslator(Translator):
                         )
                         compute_type = "int8"
                     except Exception as retry_exc:
-                        raise ModelNotReadyError(f"无法加载本地翻译模型：{retry_exc}") from exc
+                        raise ModelNotReadyError(
+                            tr("无法加载本地翻译模型：{error}", error=retry_exc)
+                        ) from exc
                 else:
-                    raise ModelNotReadyError(f"无法加载本地翻译模型：{exc}") from exc
+                    raise ModelNotReadyError(
+                        tr("无法加载本地翻译模型：{error}", error=exc)
+                    ) from exc
             self._sp = sp
             self._translator = translator
             self._device = device
@@ -179,7 +194,11 @@ class NLLBTranslator(Translator):
                 tgt = nllb_code(target_lang)
             except UnknownLanguageError as exc:
                 raise TranslationError(
-                    f"本地 NLLB 不支持该语言：{source_lang} → {target_lang}"
+                    tr(
+                        "本地 NLLB 不支持该语言：{source} → {target}",
+                        source=source_lang,
+                        target=target_lang,
+                    )
                 ) from exc
             # NLLB is trained with a source-language token and EOS.  The
             # target language is supplied as a decoder prefix.
@@ -197,19 +216,19 @@ class NLLBTranslator(Translator):
                     return_scores=False,
                 )
             except Exception as exc:
-                raise TranslationError(f"本地翻译失败：{exc}") from exc
+                raise TranslationError(tr("本地翻译失败：{error}", error=exc)) from exc
             if not results or not results[0].hypotheses:
-                raise TranslationError("本地翻译没有返回结果。")
+                raise TranslationError(tr("本地翻译没有返回结果。"))
             output = list(results[0].hypotheses[0])
             if output and output[0] == tgt:
                 output = output[1:]
             try:
                 translated = self._sp.decode(output)
             except Exception as exc:
-                raise TranslationError(f"本地翻译解码失败：{exc}") from exc
+                raise TranslationError(tr("本地翻译解码失败：{error}", error=exc)) from exc
             translated = _clean_translation(translated)
             if not translated:
-                raise TranslationError("本地翻译返回了空文本。")
+                raise TranslationError(tr("本地翻译返回了空文本。"))
             return translated
 
     def close(self) -> None:

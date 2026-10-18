@@ -88,6 +88,7 @@ class OverlayConfig:
 
 @dataclass
 class UIConfig:
+    language: str = "zh"  # zh | en
     show_source_in_main: bool = True
     compact_mode: bool = False
 
@@ -109,6 +110,8 @@ class AppConfig:
             self.translation.provider = "auto"
         if self.translation.target_lang not in BY_CODE:
             self.translation.target_lang = DEFAULT_TARGET
+        if self.ui.language not in {"zh", "en"}:
+            self.ui.language = "zh"
         if self.asr.device not in {"auto", "cuda", "cpu"}:
             self.asr.device = "auto"
         if self.asr.language_mode != "auto" and self.asr.language not in BY_CODE:

@@ -9,7 +9,7 @@ from PySide6.QtGui import QBrush, QColor, QFont, QGuiApplication, QLinearGradien
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMenu, QVBoxLayout, QWidget
 
 from ..config import OverlayConfig
-from ..languages import language_name
+from ..i18n import display_language, tr
 from ..models import CaptionSegment
 from . import theme
 
@@ -31,7 +31,7 @@ class SubtitleOverlay(QWidget):
         self._drag_origin: QPoint | None = None
         self._window_origin: QPoint | None = None
         self._fitted_height = 0
-        self.setWindowTitle("SubLoom 字幕")
+        self.setWindowTitle(tr("SubLoom 字幕"))
         self.setWindowFlags(
             Qt.Tool
             | Qt.FramelessWindowHint
@@ -75,7 +75,7 @@ class SubtitleOverlay(QWidget):
         self._source.setStyleSheet(f"color: {theme.MUTED}; font-size: 13px;")
         self._root.addWidget(self._source)
 
-        self._hint = QLabel("正在聆听…")
+        self._hint = QLabel(tr("正在聆听…"))
         self._hint.setAlignment(Qt.AlignCenter)
         self._hint.setStyleSheet(f"color: {theme.DIM}; font-size: 11px;")
         self._root.addWidget(self._hint)
@@ -128,31 +128,31 @@ class SubtitleOverlay(QWidget):
             show_original = bool(
                 self.config.show_source and source and translated != source
             )
-            hint = "正在聆听…" if not segment.is_final else ""
+            hint = tr("正在聆听…") if not segment.is_final else ""
         elif expected and not failed:
             # Never present source text as if it were the translated subtitle.
             # While waiting, keep the previous translation visible instead.
             if self._last_translation_text:
                 main = self._last_translation_text
-                hint = "正在更新译文…" if same_segment else "正在翻译新一句…"
+                hint = tr("正在更新译文…") if same_segment else tr("正在翻译新一句…")
             else:
-                main = "正在翻译…"
+                main = tr("正在翻译…")
                 hint = ""
                 kind = "placeholder"
         elif failed:
-            main = source or "翻译失败"
-            hint = "翻译失败 · 显示原文"
+            main = source or tr("翻译失败")
+            hint = tr("翻译失败 · 显示原文")
             kind = "error"
         else:
             main = source
-            hint = "仅原文" if segment.target_lang and segment.target_lang != segment.source_lang else ""
+            hint = tr("仅原文") if segment.target_lang and segment.target_lang != segment.source_lang else ""
             kind = "source"
 
         if not main:
             self._translation.setText("")
             self._source.setText("")
             self._source.setVisible(False)
-            self._hint.setText("正在聆听…")
+            self._hint.setText(tr("正在聆听…"))
             self._hint.show()
             self._refit()
             return
@@ -179,17 +179,18 @@ class SubtitleOverlay(QWidget):
             f"color: {theme.LIVE if not segment.is_final else theme.MUTED};"
             " font-size: 9px; font-weight: 700; letter-spacing: 2px;"
         )
-        src = language_name(segment.source_lang)
-        tgt = language_name(segment.target_lang)
+        src = display_language(segment.source_lang)
+        tgt = display_language(segment.target_lang)
         if expected or translated:
             self._lang.setText(f"{src}  →  {tgt}" if tgt and tgt != src else src)
         elif tgt and tgt != src:
-            self._lang.setText(f"{src}  ·  原文")
+            self._lang.setText(f"{src}  ·  {tr('原文')}")
         else:
             self._lang.setText(src)
         self._refit()
 
-    def set_session_hint(self, text: str = "正在聆听…") -> None:
+    def set_session_hint(self, text: str | None = None) -> None:
+        text = text or tr("正在聆听…")
         if self._segment is None or not self._segment.source_text:
             self._translation.setText("")
             self._source.setText("")
@@ -206,7 +207,7 @@ class SubtitleOverlay(QWidget):
         self._translation.setText("")
         self._source.setText("")
         self._source.setVisible(False)
-        self._hint.setText("正在聆听…")
+        self._hint.setText(tr("正在聆听…"))
         self._hint.show()
         self._refit()
 
@@ -327,10 +328,10 @@ class SubtitleOverlay(QWidget):
         if self.config.click_through:
             return
         menu = QMenu(self)
-        menu.addAction("字幕设置…", self.settings_requested.emit)
+        menu.addAction(tr("字幕设置…"), self.settings_requested.emit)
         menu.addSeparator()
-        menu.addAction("增大字号", lambda: self.font_size_changed.emit(self.config.font_size + 2))
-        menu.addAction("减小字号", lambda: self.font_size_changed.emit(self.config.font_size - 2))
+        menu.addAction(tr("增大字号"), lambda: self.font_size_changed.emit(self.config.font_size + 2))
+        menu.addAction(tr("减小字号"), lambda: self.font_size_changed.emit(self.config.font_size - 2))
         menu.addSeparator()
-        menu.addAction("隐藏字幕窗", self.hide_requested.emit)
+        menu.addAction(tr("隐藏字幕窗"), self.hide_requested.emit)
         menu.exec(self.mapToGlobal(position))

@@ -11,11 +11,13 @@ def test_defaults_roundtrip(tmp_path: Path):
     config.translation.target_lang = "ja"
     config.translation.cloud.model = "test-model"
     config.overlay.font_size = 31
+    config.ui.language = "en"
     save_config(config, target)
     loaded = load_config(target)
     assert loaded.translation.target_lang == "ja"
     assert loaded.translation.cloud.model == "test-model"
     assert loaded.overlay.font_size == 31
+    assert loaded.ui.language == "en"
 
 
 def test_nested_cloud_values_survive(tmp_path: Path):
@@ -37,7 +39,7 @@ def test_invalid_values_are_clamped(tmp_path: Path):
     target.write_text(
         '{"translation": {"target_lang": "xx", "provider": "bogus"},'
         ' "overlay": {"font_size": 999, "opacity": 4},'
-        ' "asr": {"silence_ms": 10}}',
+        ' "asr": {"silence_ms": 10}, "ui": {"language": "fr"}}',
         encoding="utf-8",
     )
     config = load_config(target)
@@ -46,6 +48,7 @@ def test_invalid_values_are_clamped(tmp_path: Path):
     assert config.overlay.font_size == 64
     assert config.overlay.opacity == 1.0
     assert config.asr.silence_ms == 200
+    assert config.ui.language == "zh"
 
 
 def test_corrupt_config_falls_back(tmp_path: Path):

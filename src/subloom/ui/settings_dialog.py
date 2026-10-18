@@ -8,7 +8,6 @@ from dataclasses import replace
 
 from PySide6.QtCore import QEventLoop, Qt, QThread, Signal
 from PySide6.QtWidgets import (
-    QAbstractSpinBox,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -39,6 +38,7 @@ from ..asr.whisper_engine import (
     resolve_model,
 )
 from ..config import AppConfig, CloudConfig
+from ..i18n import UI_LANGUAGES, language_choice_label, tr
 from ..languages import TARGET_LANGUAGES
 from ..secrets import get_api_key, mask_key, set_api_key
 from ..translate.cloud import CloudTranslator
@@ -76,7 +76,7 @@ class SettingsDialog(QDialog):
         self.config = copy.deepcopy(config)
         self._clear_key = False
         self._threads: list[_TaskThread] = []
-        self.setWindowTitle("SubLoom 设置")
+        self.setWindowTitle(tr("SubLoom 设置"))
         self.setMinimumSize(790, 700)
         self.resize(810, 720)
         self._build()
@@ -86,27 +86,28 @@ class SettingsDialog(QDialog):
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 20, 24, 18)
         root.setSpacing(14)
-        title = QLabel("设置")
+        title = QLabel(tr("设置"))
         title.setStyleSheet(f"font-size: 22px; font-weight: 700; color: {theme.TEXT};")
-        subtitle = QLabel("调整识别、翻译与字幕显示。修改会在下次开始字幕时生效。")
+        subtitle = QLabel(tr("调整识别、翻译与字幕显示。修改会在下次开始字幕时生效。"))
         subtitle.setObjectName("Hint")
         root.addWidget(title)
         root.addWidget(subtitle)
 
         tabs = QTabWidget()
-        tabs.addTab(self._wrap(self._build_asr_tab()), "识别")
-        tabs.addTab(self._wrap(self._build_translation_tab()), "翻译")
-        tabs.addTab(self._wrap(self._build_overlay_tab()), "字幕")
-        tabs.addTab(self._wrap(self._build_about_tab()), "关于")
+        tabs.addTab(self._wrap(self._build_asr_tab()), tr("识别"))
+        tabs.addTab(self._wrap(self._build_translation_tab()), tr("翻译"))
+        tabs.addTab(self._wrap(self._build_overlay_tab()), tr("字幕"))
+        tabs.addTab(self._wrap(self._build_interface_tab()), tr("界面"))
+        tabs.addTab(self._wrap(self._build_about_tab()), tr("关于"))
         root.addWidget(tabs, 1)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Save)
         save = buttons.button(QDialogButtonBox.Save)
-        save.setText("保存")
+        save.setText(tr("保存"))
         save.setObjectName("PrimaryButton")
         save.setMinimumWidth(110)
         cancel = buttons.button(QDialogButtonBox.Cancel)
-        cancel.setText("取消")
+        cancel.setText(tr("取消"))
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
@@ -135,47 +136,51 @@ class SettingsDialog(QDialog):
         model_row = QHBoxLayout()
         self._model_combo = QComboBox()
         labels = {
-            "auto": "自动（推荐：GPU 用 large-v3-turbo）",
-            "large-v3-turbo": "Large v3 Turbo · 快且准（约 1.6 GB）",
-            "large-v3": "Large v3 · 最高准确率（约 3.1 GB）",
-            "distil-large-v3.5": "Distil Large v3.5 · 英文优先（约 1.5 GB）",
-            "distil-large-v3": "Distil Large v3 · 英文优先（约 1.5 GB）",
-            "medium": "Medium · 均衡（约 1.5 GB）",
-            "small": "Small · 轻量（约 484 MB）",
-            "base": "Base · 更快（约 145 MB）",
-            "tiny": "Tiny · 仅测试（约 75 MB）",
+            "auto": tr("自动（推荐：GPU 用 large-v3-turbo）"),
+            "large-v3-turbo": tr("Large v3 Turbo · 快且准（约 1.6 GB）"),
+            "large-v3": tr("Large v3 · 最高准确率（约 3.1 GB）"),
+            "distil-large-v3.5": tr("Distil Large v3.5 · 英文优先（约 1.5 GB）"),
+            "distil-large-v3": tr("Distil Large v3 · 英文优先（约 1.5 GB）"),
+            "medium": tr("Medium · 均衡（约 1.5 GB）"),
+            "small": tr("Small · 轻量（约 484 MB）"),
+            "base": tr("Base · 更快（约 145 MB）"),
+            "tiny": tr("Tiny · 仅测试（约 75 MB）"),
         }
         for value in WHISPER_MODELS:
             self._model_combo.addItem(labels.get(value, value), value)
         self._set_combo(self._model_combo, self.config.asr.model)
         model_row.addWidget(self._model_combo, 1)
-        self._download_whisper_btn = QPushButton("预下载")
+        self._download_whisper_btn = QPushButton(tr("预下载"))
         self._download_whisper_btn.setObjectName("SecondaryButton")
         self._download_whisper_btn.clicked.connect(self._download_whisper)
         model_row.addWidget(self._download_whisper_btn)
-        form.addRow("识别模型", model_row)
+        form.addRow(tr("识别模型"), model_row)
         self._asr_status = QLabel()
         self._asr_status.setObjectName("Hint")
         self._asr_status.setWordWrap(True)
         form.addRow("", self._asr_status)
 
         self._device_combo = QComboBox()
-        for value, label in (("auto", "自动选择"), ("cuda", "NVIDIA GPU (CUDA)"), ("cpu", "CPU")):
+        for value, label in (
+            ("auto", tr("自动选择")),
+            ("cuda", "NVIDIA GPU (CUDA)"),
+            ("cpu", "CPU"),
+        ):
             self._device_combo.addItem(label, value)
         self._set_combo(self._device_combo, self.config.asr.device)
-        form.addRow("计算设备", self._device_combo)
+        form.addRow(tr("计算设备"), self._device_combo)
 
         self._compute_combo = QComboBox()
         for value, label in (
-            ("auto", "自动"),
-            ("float16", "float16 · GPU 推荐"),
+            ("auto", tr("自动")),
+            ("float16", tr("float16 · GPU 推荐")),
             ("int8_float16", "int8_float16"),
-            ("int8", "int8 · CPU 推荐"),
-            ("float32", "float32 · 兼容性最好"),
+            ("int8", tr("int8 · CPU 推荐")),
+            ("float32", tr("float32 · 兼容性最好")),
         ):
             self._compute_combo.addItem(label, value)
         self._set_combo(self._compute_combo, self.config.asr.compute_type)
-        form.addRow("计算精度", self._compute_combo)
+        form.addRow(tr("计算精度"), self._compute_combo)
         self._gpu_status = QLabel()
         self._gpu_status.setWordWrap(True)
         self._gpu_status.setObjectName("Hint")
@@ -184,40 +189,57 @@ class SettingsDialog(QDialog):
         self._refresh_gpu_status()
 
         self._source_lang_combo = QComboBox()
-        self._source_lang_combo.addItem("自动检测（推荐）", "auto")
+        self._source_lang_combo.addItem(tr("自动检测（推荐）"), "auto")
         for lang in TARGET_LANGUAGES:
             if lang.code == "zh-Hant":
                 continue
             self._source_lang_combo.addItem(
-                f"{lang.name_zh}  ·  {lang.name_en}", lang.code
+                language_choice_label(lang.code), lang.code
             )
         self._set_combo(self._source_lang_combo, self.config.asr.language)
-        form.addRow("源语言", self._source_lang_combo)
-        source_hint = QLabel("保持自动检测即可；锁定源语言可以避免短句误判。")
+        form.addRow(tr("源语言"), self._source_lang_combo)
+        source_hint = QLabel(tr("保持自动检测即可；锁定源语言可以避免短句误判。"))
         source_hint.setObjectName("Hint")
         form.addRow("", source_hint)
 
         self._silence_slider, self._silence_label = self._slider_row(
-            form, "断句静音", 200, 1500, self.config.asr.silence_ms, " ms",
-            "越短越实时，但句子可能被切碎。"
+            form,
+            tr("断句静音"),
+            200,
+            1500,
+            self.config.asr.silence_ms,
+            " ms",
+            tr("越短越实时，但句子可能被切碎。"),
         )
         self._max_segment_slider, self._max_segment_label = self._slider_row(
-            form, "最长句长", 3, 20, int(self.config.asr.max_segment_sec), " 秒",
-            "连续讲话时强制断句，避免字幕过长。"
+            form,
+            tr("最长句长"),
+            3,
+            20,
+            int(self.config.asr.max_segment_sec),
+            " s" if tr("秒") == "s" else " 秒",
+            tr("连续讲话时强制断句，避免字幕过长。"),
         )
         self._partial_slider, self._partial_label = self._slider_row(
-            form, "局部刷新", 300, 1500, self.config.asr.partial_interval_ms, " ms",
-            "说话过程中更新字幕的频率。"
+            form,
+            tr("局部刷新"),
+            300,
+            1500,
+            self.config.asr.partial_interval_ms,
+            " ms",
+            tr("说话过程中更新字幕的频率。"),
         )
-        self._context_check = QCheckBox("用上一句作为识别上下文（提升专有名词准确率）")
+        self._context_check = QCheckBox(tr("用上一句作为识别上下文（提升专有名词准确率）"))
         self._context_check.setChecked(self.config.asr.use_context_prompt)
         form.addRow("", self._context_check)
         form.addRow("", QLabel(""))
         self._refresh_asr_status()
 
         note = QLabel(
-            "识别完全在本机完成，音频不会上传。首次使用会下载模型；下载后保存在用户数据目录，"
-            "不进入 Git 仓库。"
+            tr(
+                "识别完全在本机完成，音频不会上传。首次使用会下载模型；下载后保存在用户数据目录，"
+                "不进入 Git 仓库。"
+            )
         )
         note.setWordWrap(True)
         note.setObjectName("Hint")
@@ -260,44 +282,46 @@ class SettingsDialog(QDialog):
 
         self._provider_combo = QComboBox()
         for value, label in (
-            ("auto", "自动（有云端 Key 时优先云端）"),
-            ("cloud", "云端 API"),
-            ("local", "本地 NLLB 模型"),
-            ("off", "仅识别，不翻译"),
+            ("auto", tr("自动（有云端 Key 时优先云端）")),
+            ("cloud", tr("云端 API")),
+            ("local", tr("本地 NLLB 模型")),
+            ("off", tr("仅识别，不翻译")),
         ):
             self._provider_combo.addItem(label, value)
         self._set_combo(self._provider_combo, self.config.translation.provider)
         self._provider_combo.currentIndexChanged.connect(self._refresh_translation_status)
-        form.addRow("翻译方式", self._provider_combo)
+        form.addRow(tr("翻译方式"), self._provider_combo)
 
         self._target_lang_combo = QComboBox()
         for lang in TARGET_LANGUAGES:
-            self._target_lang_combo.addItem(f"{lang.name_zh}  ·  {lang.name_en}", lang.code)
+            self._target_lang_combo.addItem(language_choice_label(lang.code), lang.code)
         self._set_combo(self._target_lang_combo, self.config.translation.target_lang)
-        form.addRow("目标语言", self._target_lang_combo)
+        form.addRow(tr("目标语言"), self._target_lang_combo)
 
-        self._partials_check = QCheckBox("说话过程中也翻译（更实时，云端会增加调用次数）")
+        self._partials_check = QCheckBox(tr("说话过程中也翻译（更实时，云端会增加调用次数）"))
         self._partials_check.setChecked(self.config.translation.translate_partials)
         form.addRow("", self._partials_check)
 
-        cloud_box = QGroupBox("云端翻译")
+        cloud_box = QGroupBox(tr("云端翻译"))
         cloud_form = QFormLayout(cloud_box)
         cloud_form.setContentsMargins(14, 18, 14, 12)
         cloud_form.setSpacing(10)
         self._base_url_edit = QLineEdit(self.config.translation.cloud.base_url)
         self._base_url_edit.setPlaceholderText("https://api.deepseek.com/v1")
-        cloud_form.addRow("API 地址", self._base_url_edit)
+        cloud_form.addRow(tr("API 地址"), self._base_url_edit)
         self._cloud_model_edit = QLineEdit(self.config.translation.cloud.model)
         self._cloud_model_edit.setPlaceholderText("deepseek-chat")
-        cloud_form.addRow("模型", self._cloud_model_edit)
+        cloud_form.addRow(tr("模型"), self._cloud_model_edit)
         key_row = QHBoxLayout()
         self._key_edit = QLineEdit()
         self._key_edit.setEchoMode(QLineEdit.Password)
         existing = get_api_key()
         self._key_edit.setPlaceholderText(
-            f"已保存：{mask_key(existing)}（留空不修改）" if existing else "sk-…（保存到系统钥匙串）"
+            tr("已保存：{mask}（留空不修改）", mask=mask_key(existing))
+            if existing
+            else tr("sk-…（保存到系统钥匙串）")
         )
-        self._show_key_btn = QPushButton("显示")
+        self._show_key_btn = QPushButton(tr("显示"))
         self._show_key_btn.setObjectName("GhostButton")
         self._show_key_btn.setCheckable(True)
         self._show_key_btn.toggled.connect(
@@ -305,7 +329,7 @@ class SettingsDialog(QDialog):
                 QLineEdit.Normal if checked else QLineEdit.Password
             )
         )
-        clear_btn = QPushButton("清除")
+        clear_btn = QPushButton(tr("清除"))
         clear_btn.setObjectName("DangerGhostButton")
         clear_btn.clicked.connect(self._clear_saved_key)
         key_row.addWidget(self._key_edit, 1)
@@ -316,22 +340,21 @@ class SettingsDialog(QDialog):
         self._timeout_spin = QDoubleSpinBox()
         self._timeout_spin.setRange(2.0, 60.0)
         self._timeout_spin.setDecimals(1)
-        self._timeout_spin.setSuffix(" 秒")
-        self._timeout_spin.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self._timeout_spin.setSuffix(tr(" 秒"))
+        self._timeout_spin.setMinimumWidth(120)
         self._timeout_spin.setValue(self.config.translation.cloud.timeout_sec)
         self._retries_spin = QSpinBox()
         self._retries_spin.setRange(0, 3)
-        self._retries_spin.setSuffix(" 次")
-        self._retries_spin.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self._retries_spin.setMinimumWidth(90)
         self._retries_spin.setValue(self.config.translation.cloud.max_retries)
-        timeout_row.addWidget(QLabel("超时"))
+        timeout_row.addWidget(QLabel(tr("超时")))
         timeout_row.addWidget(self._timeout_spin)
         timeout_row.addSpacing(10)
-        timeout_row.addWidget(QLabel("重试"))
+        timeout_row.addWidget(QLabel(tr("重试")))
         timeout_row.addWidget(self._retries_spin)
         timeout_row.addStretch(1)
-        cloud_form.addRow("请求", timeout_row)
-        self._test_cloud_btn = QPushButton("测试云端翻译")
+        cloud_form.addRow(tr("请求"), timeout_row)
+        self._test_cloud_btn = QPushButton(tr("测试云端翻译"))
         self._test_cloud_btn.setObjectName("SecondaryButton")
         self._test_cloud_btn.clicked.connect(self._test_cloud)
         cloud_form.addRow("", self._test_cloud_btn)
@@ -341,7 +364,7 @@ class SettingsDialog(QDialog):
         cloud_form.addRow("", self._cloud_test_status)
         form.addRow(cloud_box)
 
-        local_box = QGroupBox("本地翻译（离线兜底）")
+        local_box = QGroupBox(tr("本地翻译（离线兜底）"))
         local_layout = QVBoxLayout(local_box)
         local_layout.setContentsMargins(14, 18, 14, 12)
         local_layout.setSpacing(8)
@@ -349,14 +372,18 @@ class SettingsDialog(QDialog):
         self._local_status.setWordWrap(True)
         local_layout.addWidget(self._local_status)
         local_note = QLabel(
-            f"NLLB-200 distilled 600M · {NLLB_SIZE_HINT}。模型许可为 {NLLB_LICENSE}，"
-            "请根据你的使用场景确认是否可用。模型不随仓库分发。"
+            tr(
+                "NLLB-200 distilled 600M · {size}。模型许可为 {license}，"
+                "请根据你的使用场景确认是否可用。模型不随仓库分发。",
+                size=tr(NLLB_SIZE_HINT),
+                license=tr(NLLB_LICENSE),
+            )
         )
         local_note.setWordWrap(True)
         local_note.setObjectName("Hint")
         local_layout.addWidget(local_note)
         local_row = QHBoxLayout()
-        self._download_local_btn = QPushButton("下载本地模型")
+        self._download_local_btn = QPushButton(tr("下载本地模型"))
         self._download_local_btn.setObjectName("SecondaryButton")
         self._download_local_btn.clicked.connect(self._download_local)
         local_row.addWidget(self._download_local_btn)
@@ -378,30 +405,32 @@ class SettingsDialog(QDialog):
         page = QWidget()
         form = self._form()
         page.setLayout(form)
-        self._overlay_enabled = QCheckBox("启动字幕时显示悬浮字幕窗")
+        self._overlay_enabled = QCheckBox(tr("启动字幕时显示悬浮字幕窗"))
         self._overlay_enabled.setChecked(self.config.overlay.enabled)
         form.addRow("", self._overlay_enabled)
-        self._overlay_source = QCheckBox("同时显示原文")
+        self._overlay_source = QCheckBox(tr("同时显示原文"))
         self._overlay_source.setChecked(self.config.overlay.show_source)
         form.addRow("", self._overlay_source)
-        self._overlay_click = QCheckBox("鼠标穿透（字幕窗不挡操作；启用后需从主界面修改设置）")
+        self._overlay_click = QCheckBox(
+            tr("鼠标穿透（字幕窗不挡操作；启用后需从主界面修改设置）")
+        )
         self._overlay_click.setChecked(self.config.overlay.click_through)
         form.addRow("", self._overlay_click)
         self._font_slider, self._font_label = self._slider_row(
-            form, "正文字号", 14, 48, self.config.overlay.font_size, " px"
+            form, tr("正文字号"), 14, 48, self.config.overlay.font_size, " px"
         )
         self._opacity_slider, self._opacity_label = self._slider_row(
-            form, "背景不透明度", 30, 100, int(self.config.overlay.opacity * 100), " %"
+            form, tr("背景不透明度"), 30, 100, int(self.config.overlay.opacity * 100), " %"
         )
         self._width_slider, self._width_label = self._slider_row(
-            form, "字幕窗宽度", 600, 1600, self.config.overlay.width, " px"
+            form, tr("字幕窗宽度"), 600, 1600, self.config.overlay.width, " px"
         )
-        reset = QPushButton("恢复默认位置")
+        reset = QPushButton(tr("恢复默认位置"))
         reset.setObjectName("SecondaryButton")
         reset.clicked.connect(lambda: self._reset_position(True))
-        form.addRow("位置", reset)
+        form.addRow(tr("位置"), reset)
         self._reset_pos_requested = False
-        hint = QLabel("提示：可以直接拖动悬浮字幕窗；右键可快速调整字号或隐藏。")
+        hint = QLabel(tr("提示：可以直接拖动悬浮字幕窗；右键可快速调整字号或隐藏。"))
         hint.setObjectName("Hint")
         hint.setWordWrap(True)
         form.addRow(hint)
@@ -409,6 +438,23 @@ class SettingsDialog(QDialog):
 
     def _reset_position(self, requested: bool) -> None:
         self._reset_pos_requested = requested
+
+    # ------------------------------------------------------------------ interface
+    def _build_interface_tab(self) -> QWidget:
+        page = QWidget()
+        form = self._form()
+        page.setLayout(form)
+        self._ui_language_combo = QComboBox()
+        for code, label in UI_LANGUAGES:
+            self._ui_language_combo.addItem(label, code)
+        self._set_combo(self._ui_language_combo, self.config.ui.language)
+        form.addRow(tr("界面语言"), self._ui_language_combo)
+        hint = QLabel(tr("切换后需要重启 SubLoom 才会生效。"))
+        hint.setObjectName("Hint")
+        hint.setWordWrap(True)
+        form.addRow("", hint)
+        form.addRow("", QLabel(""))
+        return page
 
     # ------------------------------------------------------------------ about
     def _build_about_tab(self) -> QWidget:
@@ -420,24 +466,25 @@ class SettingsDialog(QDialog):
         title.setStyleSheet(f"font-size: 20px; font-weight: 700; color: {theme.ACCENT};")
         layout.addWidget(title)
         desc = QLabel(
-            "跨平台实时语音翻译字幕。识别在本机完成，翻译可选择云端或本地模型；"
-            "音频默认不离开设备。"
+            tr(
+                "跨平台实时语音翻译字幕。识别在本机完成，翻译可选择云端或本地模型；"
+                "音频默认不离开设备。"
+            )
         )
         desc.setWordWrap(True)
         layout.addWidget(desc)
         info = QLabel(
-            f"版本 {__version__}\n"
-            "代码许可：MIT\n"
-            "识别模型：faster-whisper（MIT）\n"
-            "本地翻译模型：NLLB-200（CC BY-NC 4.0，模型单独下载）\n"
-            "云端翻译：由你配置的服务商提供，费用与隐私政策以其条款为准。"
+            tr(
+                "版本 {version}\n代码许可：MIT\n识别模型：faster-whisper（MIT）\n本地翻译模型：NLLB-200（CC BY-NC 4.0，模型单独下载）\n云端翻译：由你配置的服务商提供，费用与隐私政策以其条款为准。",
+                version=__version__,
+            )
         )
         info.setWordWrap(True)
         info.setObjectName("Hint")
         layout.addWidget(info)
         link = QLabel(
             '<a href="https://github.com/Seapeak19/Real-time-Voice-Recognition-Subtitles">'
-            "项目主页 / 问题反馈</a>"
+            f"{tr('项目主页 / 问题反馈')}</a>"
         )
         link.setOpenExternalLinks(True)
         link.setStyleSheet(f"color: {theme.ACCENT};")
@@ -450,10 +497,10 @@ class SettingsDialog(QDialog):
         model = self._selected_model()
         available = model_available(replace(self.config.asr, model=model))
         if available:
-            self._asr_status.setText(f"● {model} 已下载，启动时直接加载。")
+            self._asr_status.setText(tr("● {model} 已下载，启动时直接加载。", model=model))
             self._asr_status.setStyleSheet(f"color: {theme.ACCENT}; font-size: 11px;")
         else:
-            self._asr_status.setText("○ 尚未下载，首次开始时会自动下载（也可点“预下载”）。")
+            self._asr_status.setText(tr("○ 尚未下载，首次开始时会自动下载（也可点“预下载”）。"))
             self._asr_status.setStyleSheet(f"color: {theme.MUTED}; font-size: 11px;")
 
     def _selected_model(self) -> str:
@@ -466,51 +513,51 @@ class SettingsDialog(QDialog):
         ready, reason = cuda_ready()
         devices = cuda_device_count()
         if ready:
-            self._gpu_status.setText("● CUDA 可用，识别将使用 NVIDIA GPU 加速。")
+            self._gpu_status.setText(tr("● CUDA 可用，识别将使用 NVIDIA GPU 加速。"))
             self._gpu_status.setStyleSheet(f"color: {theme.ACCENT}; font-size: 11px;")
             self._gpu_status.setToolTip("")
         elif devices > 0:
-            self._gpu_status.setText("⚠ 检测到 NVIDIA GPU，但 CUDA 运行库不可用，将回退 CPU。")
+            self._gpu_status.setText(tr("⚠ 检测到 NVIDIA GPU，但 CUDA 运行库不可用，将回退 CPU。"))
             self._gpu_status.setStyleSheet(f"color: {theme.WARN}; font-size: 11px;")
             self._gpu_status.setToolTip(f"{reason}\n\n{install_hint()}")
         else:
-            self._gpu_status.setText("○ 未检测到可用的 NVIDIA GPU，将使用 CPU。")
+            self._gpu_status.setText(tr("○ 未检测到可用的 NVIDIA GPU，将使用 CPU。"))
             self._gpu_status.setStyleSheet(f"color: {theme.MUTED}; font-size: 11px;")
             self._gpu_status.setToolTip("")
 
     def _refresh_local_status(self) -> None:
         if local_model_available(self.config.translation.local):
-            self._local_status.setText("● 本地模型已下载，可用于离线翻译和云端失败兜底。")
+            self._local_status.setText(tr("● 本地模型已下载，可用于离线翻译和云端失败兜底。"))
             self._local_status.setStyleSheet(f"color: {theme.ACCENT}; font-size: 11px;")
-            self._download_local_btn.setText("重新检查")
+            self._download_local_btn.setText(tr("重新检查"))
         else:
-            self._local_status.setText("○ 本地模型未下载。")
+            self._local_status.setText(tr("○ 本地模型未下载。"))
             self._local_status.setStyleSheet(f"color: {theme.MUTED}; font-size: 11px;")
-            self._download_local_btn.setText("下载本地模型")
+            self._download_local_btn.setText(tr("下载本地模型"))
 
     def _refresh_translation_status(self) -> None:
         provider = self._provider_combo.currentData() or "auto"
         has_key = bool(get_api_key()) or bool(self._key_edit.text().strip())
         local_ok = local_model_available(self.config.translation.local)
         if provider == "auto":
-            text = "将优先使用云端；云端失败或未配置时使用本地模型。"
+            text = tr("将优先使用云端；云端失败或未配置时使用本地模型。")
         elif provider == "cloud":
-            text = "需要云端 API Key；失败时若本地模型存在会自动兜底。"
+            text = tr("需要云端 API Key；失败时若本地模型存在会自动兜底。")
         elif provider == "local":
-            text = "完全离线。若模型未下载，开始时会提示。"
+            text = tr("完全离线。若模型未下载，开始时会提示。")
         else:
-            text = "只显示识别原文，不调用翻译。"
+            text = tr("只显示识别原文，不调用翻译。")
         if provider in {"auto", "cloud"} and not has_key:
-            text += " 当前未配置云端 Key。"
+            text += tr(" 当前未配置云端 Key。")
         if provider in {"auto", "local"} and not local_ok:
-            text += " 当前未下载本地模型。"
+            text += tr(" 当前未下载本地模型。")
         self._translation_status.setText(text)
 
     # ------------------------------------------------------------------ key
     def _clear_saved_key(self) -> None:
         self._clear_key = True
         self._key_edit.clear()
-        self._key_edit.setPlaceholderText("保存后将清除已存 Key")
+        self._key_edit.setPlaceholderText(tr("保存后将清除已存 Key"))
         self._refresh_translation_status()
 
     def _commit_key(self) -> tuple[bool, str]:
@@ -518,12 +565,15 @@ class SettingsDialog(QDialog):
         if typed:
             ok, error = set_api_key(typed)
             if not ok:
-                return False, f"无法写入系统钥匙串：{error}\n可改用 SUBLOOM_API_KEY 环境变量。"
+                return False, tr(
+                    "无法写入系统钥匙串：{error}\n可改用 SUBLOOM_API_KEY 环境变量。",
+                    error=error,
+                )
             self._clear_key = False
         elif self._clear_key:
             ok, error = set_api_key("")
             if not ok:
-                return False, f"无法清除系统钥匙串：{error}"
+                return False, tr("无法清除系统钥匙串：{error}", error=error)
             self._clear_key = False
         return True, ""
 
@@ -537,7 +587,7 @@ class SettingsDialog(QDialog):
         progress.setAutoClose(False)
         progress.setMinimumWidth(420)
         progress.show()
-        outcome = {"ok": False, "message": "任务未完成"}
+        outcome = {"ok": False, "message": tr("任务未完成")}
         thread = _TaskThread(fn, self)
         self._threads.append(thread)
         thread.progress.connect(progress.setLabelText)
@@ -554,29 +604,29 @@ class SettingsDialog(QDialog):
         self._download_whisper_btn.setEnabled(False)
         model = self._selected_model()
         ok, message = self._run_task(
-            f"正在下载 {model}…",
+            tr("正在下载 {model}…", model=model),
             lambda emit: download_model(model, progress=emit),
         )
         self._download_whisper_btn.setEnabled(True)
         self._refresh_asr_status()
         if not ok:
-            QMessageBox.warning(self, "下载失败", message)
+            QMessageBox.warning(self, tr("下载失败"), message)
 
     def _download_local(self) -> None:
         if local_model_available(self.config.translation.local):
             self._refresh_local_status()
-            QMessageBox.information(self, "本地模型", "本地翻译模型已就绪。")
+            QMessageBox.information(self, tr("本地模型"), tr("本地翻译模型已就绪。"))
             return
         self._download_local_btn.setEnabled(False)
         ok, message = self._run_task(
-            "正在下载本地翻译模型…",
+            tr("正在下载本地翻译模型…"),
             lambda emit: download_local_model(emit, self.config.translation.local),
         )
         self._download_local_btn.setEnabled(True)
         self._refresh_local_status()
         self._refresh_translation_status()
         if not ok:
-            QMessageBox.warning(self, "下载失败", message)
+            QMessageBox.warning(self, tr("下载失败"), message)
 
     def _test_cloud(self) -> None:
         ok, error = self._commit_key()
@@ -584,10 +634,10 @@ class SettingsDialog(QDialog):
             QMessageBox.warning(self, "API Key", error)
             return
         if not get_api_key():
-            QMessageBox.warning(self, "缺少 Key", "请先填写云端翻译 API Key。")
+            QMessageBox.warning(self, tr("缺少 Key"), tr("请先填写云端翻译 API Key。"))
             return
         self._test_cloud_btn.setEnabled(False)
-        self._cloud_test_status.setText("正在测试…")
+        self._cloud_test_status.setText(tr("正在测试…"))
         self._cloud_test_status.setStyleSheet(f"color: {theme.MUTED}; font-size: 11px;")
         target = self._target_lang_combo.currentData() or "zh"
         cloud_config = CloudConfig(
@@ -600,7 +650,7 @@ class SettingsDialog(QDialog):
         def test(emit):
             translator = CloudTranslator(cloud_config)
             try:
-                emit("正在请求云端翻译…")
+                emit(tr("正在请求云端翻译…"))
                 return translator.translate(
                     "Hello, this is a SubLoom subtitle test.",
                     "en",
@@ -610,13 +660,13 @@ class SettingsDialog(QDialog):
             finally:
                 translator.close()
 
-        ok, message = self._run_task("正在测试云端翻译…", test)
+        ok, message = self._run_task(tr("正在测试云端翻译…"), test)
         self._test_cloud_btn.setEnabled(True)
         if ok:
-            self._cloud_test_status.setText(f"● 成功：{message}")
+            self._cloud_test_status.setText(tr("● 成功：{text}", text=message))
             self._cloud_test_status.setStyleSheet(f"color: {theme.ACCENT}; font-size: 11px;")
         else:
-            self._cloud_test_status.setText(f"✕ 失败：{message}")
+            self._cloud_test_status.setText(tr("✕ 失败：{error}", error=message))
             self._cloud_test_status.setStyleSheet(f"color: {theme.ERROR}; font-size: 11px;")
 
     # ------------------------------------------------------------------ save
@@ -624,7 +674,7 @@ class SettingsDialog(QDialog):
         try:
             self._apply()
         except ValueError as exc:
-            QMessageBox.warning(self, "设置无效", str(exc))
+            QMessageBox.warning(self, tr("设置无效"), str(exc))
             return
         ok, error = self._commit_key()
         if not ok:
@@ -643,14 +693,14 @@ class SettingsDialog(QDialog):
         asr.partial_interval_ms = int(self._partial_slider.value())
         asr.use_context_prompt = self._context_check.isChecked()
 
-        tr = self.config.translation
-        tr.provider = self._provider_combo.currentData() or "auto"
-        tr.target_lang = self._target_lang_combo.currentData() or "zh"
-        tr.translate_partials = self._partials_check.isChecked()
-        tr.cloud.base_url = self._base_url_edit.text().strip() or "https://api.deepseek.com/v1"
-        tr.cloud.model = self._cloud_model_edit.text().strip() or "deepseek-chat"
-        tr.cloud.timeout_sec = float(self._timeout_spin.value())
-        tr.cloud.max_retries = int(self._retries_spin.value())
+        translation = self.config.translation
+        translation.provider = self._provider_combo.currentData() or "auto"
+        translation.target_lang = self._target_lang_combo.currentData() or "zh"
+        translation.translate_partials = self._partials_check.isChecked()
+        translation.cloud.base_url = self._base_url_edit.text().strip() or "https://api.deepseek.com/v1"
+        translation.cloud.model = self._cloud_model_edit.text().strip() or "deepseek-chat"
+        translation.cloud.timeout_sec = float(self._timeout_spin.value())
+        translation.cloud.max_retries = int(self._retries_spin.value())
 
         ov = self.config.overlay
         ov.enabled = self._overlay_enabled.isChecked()
@@ -662,9 +712,13 @@ class SettingsDialog(QDialog):
         if getattr(self, "_reset_pos_requested", False):
             ov.x = None
             ov.y = None
+        self.config.ui.language = self._ui_language_combo.currentData() or "zh"
         self.config.validate()
-        if self.config.asr.device == "cpu" and self.config.asr.compute_type in {"float16", "int8_float16"}:
-            raise ValueError("CPU 模式不建议使用 float16 精度，请选择 int8 或自动。")
+        if (
+            self.config.asr.device == "cpu"
+            and self.config.asr.compute_type in {"float16", "int8_float16"}
+        ):
+            raise ValueError(tr("CPU 模式不建议使用 float16 精度，请选择 int8 或自动。"))
 
     def _set_combo(self, combo: QComboBox, value: str) -> None:
         index = combo.findData(value)

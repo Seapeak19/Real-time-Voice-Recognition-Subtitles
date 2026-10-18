@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 
 from ..config import ASRConfig
+from ..i18n import tr
 from ..models import ASRResult, ModelNotReadyError
 from ..paths import models_dir
 from .cuda_runtime import cuda_ready, install_hint
@@ -67,9 +68,13 @@ def resolve_device(config: ASRConfig) -> str:
         return "cuda" if ok else "cpu"
     if config.device == "cuda" and not ok:
         raise ModelNotReadyError(
-            "配置为使用 NVIDIA GPU，但 CUDA 后端当前不可用。\n"
-            f"原因：{reason}\n\n{install_hint()}\n\n"
-            "也可以在设置中把计算设备改为“自动”或 CPU。"
+            tr(
+                "配置为使用 NVIDIA GPU，但 CUDA 后端当前不可用。\n"
+                "原因：{reason}\n\n{hint}\n\n"
+                "也可以在设置中把计算设备改为“自动”或 CPU。",
+                reason=reason,
+                hint=install_hint(),
+            )
         )
     return config.device
 
@@ -112,7 +117,13 @@ def download_model(model: str, progress=None) -> Path:
         return Path(model).expanduser()
     target.mkdir(parents=True, exist_ok=True)
     if progress:
-        progress(f"正在下载识别模型 {model}（{MODEL_SIZES.get(model, '首次下载')}）…")
+        progress(
+            tr(
+                "正在下载识别模型 {model}（{size}）…",
+                model=model,
+                size=tr(MODEL_SIZES.get(model, "首次下载")),
+            )
+        )
     from faster_whisper.utils import download_model as fw_download
 
     log.info("Downloading Whisper model %s to %s", model, target)
@@ -123,7 +134,7 @@ def download_model(model: str, progress=None) -> Path:
         for match in matches:
             if (match.parent / "config.json").is_file():
                 return match.parent
-        raise ModelNotReadyError(f"模型下载完成但文件不完整：{target}")
+        raise ModelNotReadyError(tr("模型下载完成但文件不完整：{path}", path=target))
     return target
 
 
@@ -169,8 +180,12 @@ class WhisperASR:
     def status(self) -> tuple[bool, str]:
         model = self.model_name
         if model_available(self.config):
-            return True, f"{model} · 已下载"
-        return False, f"{model} · 首次使用将自动下载（{MODEL_SIZES.get(model, '约 1–3 GB')}）"
+            return True, tr("{model} · 已下载", model=model)
+        return False, tr(
+            "{model} · 首次使用将自动下载（{size}）",
+            model=model,
+            size=tr(MODEL_SIZES.get(model, "约 1–3 GB")),
+        )
 
     def _load_locked(self, progress=None) -> None:
         key = (self.model_name, self.device, self.compute_type)
@@ -179,7 +194,14 @@ class WhisperASR:
         self.close()
         model_path = download_model(self.model_name, progress)
         if progress:
-            progress(f"正在加载 {self.model_name}（{self.device} / {self.compute_type}）…")
+            progress(
+                tr(
+                    "正在加载 {model}（{device} / {compute}）…",
+                    model=self.model_name,
+                    device=self.device,
+                    compute=self.compute_type,
+                )
+            )
         from faster_whisper import WhisperModel
 
         try:
@@ -195,7 +217,7 @@ class WhisperASR:
                 self._force_cpu = True
                 log.warning("CUDA model load failed, falling back to CPU: %s", exc)
                 if progress:
-                    progress("GPU 运行库加载失败，已自动切换 CPU。")
+                    progress(tr("GPU 运行库加载失败，已自动切换 CPU。"))
                 self._load_locked(progress)
                 return
             raise

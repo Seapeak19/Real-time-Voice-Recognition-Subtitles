@@ -7,7 +7,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from ..config import TranslationConfig
-from ..languages import language_name, normalize_code
+from ..i18n import display_language, tr
+from ..languages import normalize_code
 from ..models import TranslationError
 from ..secrets import get_api_key
 from .cloud import CloudTranslator
@@ -60,29 +61,33 @@ class TranslationService:
     def readiness(self) -> Readiness:
         provider = self.selected_provider()
         if provider == "off":
-            return Readiness("off", True, "仅显示原文，不翻译")
+            return Readiness("off", True, tr("仅显示原文，不翻译"))
         if provider == "cloud":
             if not self.config.cloud.base_url.strip() or not self.config.cloud.model.strip():
-                return Readiness("cloud", False, "云端 API 地址或模型未填写")
+                return Readiness("cloud", False, tr("云端 API 地址或模型未填写"))
             if not get_api_key():
-                return Readiness("cloud", False, "未配置云端 API Key")
+                return Readiness("cloud", False, tr("未配置云端 API Key"))
             return Readiness(
                 "cloud",
                 True,
-                f"云端翻译 · {self.config.cloud.model}",
+                tr("云端翻译 · {model}", model=self.config.cloud.model),
             )
         if provider == "local":
             if not local_model_available(self.config.local):
                 return Readiness(
                     "local",
                     False,
-                    f"本地翻译模型未下载（{NLLB_SIZE_HINT}，{NLLB_LICENSE}）",
+                    tr(
+                        "本地翻译模型未下载（{size}，{license}）",
+                        size=tr(NLLB_SIZE_HINT),
+                        license=tr(NLLB_LICENSE),
+                    ),
                 )
-            return Readiness("local", True, "本地翻译 · NLLB-200 600M")
+            return Readiness("local", True, tr("本地翻译 · NLLB-200 600M"))
         return Readiness(
             "none",
             False,
-            "未配置翻译：请填写云端 API Key，或下载本地模型",
+            tr("未配置翻译：请填写云端 API Key，或下载本地模型"),
         )
 
     @property
@@ -120,7 +125,7 @@ class TranslationService:
             return "", "off", False, ""
         if provider == "none":
             raise TranslationError(
-                "没有可用的翻译服务。\n请配置云端 API Key，或在设置中下载本地翻译模型。"
+                tr("没有可用的翻译服务。\n请配置云端 API Key，或在设置中下载本地翻译模型。")
             )
         if provider == "cloud":
             try:
@@ -131,21 +136,23 @@ class TranslationService:
                     raise
                 log.warning("Cloud translation failed, falling back to local: %s", exc)
                 translated = self.local.translate(text, source, target, context)
-                return translated, "local", True, f"云端失败，已切换本地翻译：{exc}"
+                return translated, "local", True, tr(
+                    "云端失败，已切换本地翻译：{error}", error=exc
+                )
         translated = self.local.translate(text, source, target, context)
         return translated, "local", False, ""
 
     def provider_label(self, provider: str) -> str:
         labels = {
-            "cloud": "云端翻译",
-            "local": "本地翻译",
-            "off": "仅原文",
-            "none": "未配置",
+            "cloud": tr("云端翻译"),
+            "local": tr("本地翻译"),
+            "off": tr("仅原文"),
+            "none": tr("未配置"),
         }
         return labels.get(provider, provider)
 
     def target_label(self) -> str:
-        return language_name(self.config.target_lang, "zh")
+        return display_language(self.config.target_lang)
 
     def warm_local(self, progress=None) -> None:
         self.local.load(progress)

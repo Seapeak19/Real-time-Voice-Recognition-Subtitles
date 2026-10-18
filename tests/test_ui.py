@@ -63,7 +63,39 @@ def test_settings_dialog_has_tabs(qtbot):
     qtbot.addWidget(dialog)
     tabs = dialog.findChild(QTabWidget)
     assert tabs is not None
-    assert tabs.count() == 4
+    assert tabs.count() == 5
+
+
+def test_english_interface(qtbot):
+    from subloom import i18n
+
+    i18n.set_language("en")
+    config = make_config()
+    config.ui.language = "en"
+    window = MainWindow(config)
+    qtbot.addWidget(window)
+    assert window._settings_btn.text() == "Settings"
+    assert window._source_segment._buttons["system"].text() == "System audio"
+    assert window._start_btn.text() == "Start subtitles"
+    assert window._stats_label.text() == "0 lines"
+
+    dialog = SettingsDialog(config)
+    qtbot.addWidget(dialog)
+    tabs = dialog.findChild(QTabWidget)
+    assert tabs is not None
+    assert tabs.tabText(3) == "Interface"
+    assert tabs.tabText(4) == "About"
+
+
+def test_interface_language_can_be_saved(qtbot):
+    config = make_config()
+    dialog = SettingsDialog(config)
+    qtbot.addWidget(dialog)
+    dialog._ui_language_combo.setCurrentIndex(
+        dialog._ui_language_combo.findData("en")
+    )
+    dialog._apply()
+    assert dialog.config.ui.language == "en"
 
 
 def test_overlay_updates(qtbot):

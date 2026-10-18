@@ -10,6 +10,7 @@ from collections.abc import Sequence
 import httpx
 
 from ..config import CloudConfig
+from ..i18n import tr
 from ..languages import language_name
 from ..models import TranslationError
 from ..secrets import get_api_key
@@ -91,7 +92,7 @@ class CloudTranslator(Translator):
     ) -> str:
         api_key = get_api_key()
         if not api_key:
-            raise TranslationError("未配置云端翻译 API Key。")
+            raise TranslationError(tr("未配置云端翻译 API Key。"))
         payload = {
             "model": self.config.model,
             "messages": self._messages(text, source_lang, target_lang, context),
@@ -110,7 +111,7 @@ class CloudTranslator(Translator):
                     if attempt + 1 < attempts:
                         time.sleep(0.5 * (attempt + 1))
                         continue
-                    raise TranslationError(f"云端翻译暂时不可用（{last_error}）")
+                    raise TranslationError(tr("云端翻译暂时不可用（{error}）", error=last_error))
                 if response.status_code >= 400:
                     detail = response.text[:300]
                     try:
@@ -118,15 +119,21 @@ class CloudTranslator(Translator):
                         detail = body.get("error", {}).get("message") or body.get("message") or detail
                     except Exception:
                         pass
-                    raise TranslationError(f"云端翻译失败（HTTP {response.status_code}）：{detail}")
+                    raise TranslationError(
+                        tr(
+                            "云端翻译失败（HTTP {status}）：{detail}",
+                            status=response.status_code,
+                            detail=detail,
+                        )
+                    )
                 body = response.json()
                 choices = body.get("choices") or []
                 if not choices:
-                    raise TranslationError("云端翻译返回了空结果。")
+                    raise TranslationError(tr("云端翻译返回了空结果。"))
                 content = choices[0].get("message", {}).get("content", "")
                 cleaned = _clean_response(content)
                 if not cleaned:
-                    raise TranslationError("云端翻译返回了空文本。")
+                    raise TranslationError(tr("云端翻译返回了空文本。"))
                 return cleaned
             except TranslationError:
                 raise
@@ -135,14 +142,16 @@ class CloudTranslator(Translator):
                 if attempt + 1 < attempts:
                     time.sleep(0.4 * (attempt + 1))
                     continue
-                raise TranslationError(f"云端翻译超时：{last_error}") from exc
+                raise TranslationError(tr("云端翻译超时：{error}", error=last_error)) from exc
             except httpx.HTTPError as exc:
                 last_error = str(exc)
                 if attempt + 1 < attempts:
                     time.sleep(0.4 * (attempt + 1))
                     continue
-                raise TranslationError(f"无法连接云端翻译服务：{last_error}") from exc
-        raise TranslationError(f"云端翻译失败：{last_error}")
+                raise TranslationError(
+                    tr("无法连接云端翻译服务：{error}", error=last_error)
+                ) from exc
+        raise TranslationError(tr("云端翻译失败：{error}", error=last_error))
 
     def close(self) -> None:
         try:

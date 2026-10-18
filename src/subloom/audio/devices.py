@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 
+from ..i18n import tr
 from ..models import AudioDevice
 
 log = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ def list_microphones() -> list[AudioDevice]:
         for index, info in enumerate(devices):
             if int(info.get("max_input_channels", 0)) <= 0:
                 continue
-            name = str(info.get("name", f"输入设备 {index}"))
+            name = str(info.get("name", tr("输入设备 {index}", index=index)))
             api = ""
             try:
                 api = sd.query_hostapis(info["hostapi"])["name"]
@@ -45,7 +46,7 @@ def list_system_devices() -> list[AudioDevice]:
         try:
             import soundcard as sc
 
-            result = [AudioDevice("", "默认扬声器", "system", True)]
+            result = [AudioDevice("", tr("默认扬声器"), "system", True)]
             seen = {""}
             for mic in sc.all_microphones(include_loopback=True):
                 if not getattr(mic, "isloopback", False):
@@ -58,7 +59,7 @@ def list_system_devices() -> list[AudioDevice]:
             return result
         except Exception as exc:
             log.warning("Could not enumerate loopback devices: %s", exc)
-            return [AudioDevice("", "默认扬声器", "system", True)]
+            return [AudioDevice("", tr("默认扬声器"), "system", True)]
 
     result = []
     for device in list_microphones():
@@ -95,7 +96,7 @@ def resolve_input_device(value: str | int | None) -> int | str | None:
 
 def system_audio_hint() -> str:
     if sys.platform == "win32":
-        return "使用 WASAPI 回环捕获扬声器输出，无需安装虚拟声卡。"
+        return tr("使用 WASAPI 回环捕获扬声器输出，无需安装虚拟声卡。")
     if sys.platform == "darwin":
-        return "macOS 需安装 BlackHole 并创建多输出设备；详见 docs/macos-audio.md。"
-    return "Linux 需使用 PulseAudio/PipeWire 的 monitor 输入源。"
+        return tr("macOS 需安装 BlackHole 并创建多输出设备；详见 docs/macos-audio.md。")
+    return tr("Linux 需使用 PulseAudio/PipeWire 的 monitor 输入源。")
