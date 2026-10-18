@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import re
+import threading
+from collections import OrderedDict
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -22,6 +25,16 @@ from .nllb import (
 
 log = logging.getLogger(__name__)
 
+_CACHE_LIMIT = 256
+_TRAILING_PUNCTUATION = re.compile(r"[\s.,!?;:，。！？；：、]+$")
+
+
+def _cache_key(text: str, source: str, target: str) -> tuple[str, str, str]:
+    """Normalize harmless differences so final text can reuse a partial result."""
+    normalized = " ".join(text.split())
+    normalized = _TRAILING_PUNCTUATION.sub("", normalized).casefold()
+    return normalized, source, target
+
 
 @dataclass(slots=True)
 class Readiness:
@@ -36,6 +49,44 @@ class TranslationService:
         self._cloud: CloudTranslator | None = None
         self._local: NLLBTranslator | None = None
         self._closed = False
+        self._cache: OrderedDict[tuple[str, str, str], tuple[str, str]] = OrderedDict()
+        self._cache_lock = threading.Lock()
+        self._cache_hits = 0
+
+    @property
+    def cache_hits(self) -> int:
+        with self._cache_lock:
+            return self._cache_hits
+
+    def _cache_get(self, key: tuple[str, str, str]) -> tuple[str, str] | None:
+        with self._cache_lock:
+            try:
+                value = self._cache.pop(key)
+            except KeyError:
+                return None
+            self._cache[key] = value
+            self._cache_hits += 1
+            return value
+
+    def _cache_put(self, key: tuple[str, str, str], value: tuple[str, str]) -> None:
+        with self._cache_lock:
+            self._cache[key] = value
+            self._cache.move_to_end(key)
+            while len(self._cache) > _CACHE_LIMIT:
+                self._cache.popitem(last=False)
+
+    def cached_translation(
+        self, text: str, source_lang: str, target_lang: str
+    ) -> tuple[str, str] | None:
+        """Return a cached line for immediate display, without a network call."""
+        text = (text or "").strip()
+        if not text:
+            return None
+        source = normalize_code(source_lang)
+        target = normalize_code(target_lang)
+        if not source or not target or source == target:
+            return None
+        return self._cache_get(_cache_key(text, source, target))
 
     def _cloud_configured(self) -> bool:
         return bool(
@@ -112,7 +163,6 @@ class TranslationService:
         partial: bool = False,
     ) -> tuple[str, str, bool, str]:
         """Return ``(translation, provider, fallback_used, warning)``."""
-        del partial
         text = (text or "").strip()
         if not text:
             return "", "none", False, ""
@@ -127,19 +177,39 @@ class TranslationService:
             raise TranslationError(
                 tr("没有可用的翻译服务。\n请配置云端 API Key，或在设置中下载本地翻译模型。")
             )
+
+        key = _cache_key(text, source, target)
+        # Partials are disposable and can safely reuse each other. Finals keep
+        # their context-aware request; the pipeline may still show a cached
+        # partial immediately while the refined final translation is generated.
+        if partial:
+            cached = self._cache_get(key)
+            if cached is not None:
+                translated, cached_provider = cached
+                log.debug("Translation cache hit (%s -> %s, %s)", source, target, cached_provider)
+                return translated, cached_provider, False, ""
+
         if provider == "cloud":
             try:
-                translated = self.cloud.translate(text, source, target, context)
+                translated = self.cloud.translate(
+                    text, source, target, context, partial=partial
+                )
+                self._cache_put(key, (translated, "cloud"))
                 return translated, "cloud", False, ""
             except TranslationError as exc:
-                if not local_model_available(self.config.local):
+                # A partial request is disposable; do not spend seconds loading
+                # or running the local model just to rescue it. The final line
+                # will still use the normal fallback path.
+                if partial or not local_model_available(self.config.local):
                     raise
                 log.warning("Cloud translation failed, falling back to local: %s", exc)
                 translated = self.local.translate(text, source, target, context)
+                self._cache_put(key, (translated, "local"))
                 return translated, "local", True, tr(
                     "云端失败，已切换本地翻译：{error}", error=exc
                 )
         translated = self.local.translate(text, source, target, context)
+        self._cache_put(key, (translated, "local"))
         return translated, "local", False, ""
 
     def provider_label(self, provider: str) -> str:
@@ -164,6 +234,8 @@ class TranslationService:
         if self._closed:
             return
         self._closed = True
+        with self._cache_lock:
+            self._cache.clear()
         if self._cloud is not None:
             self._cloud.close()
         if self._local is not None:

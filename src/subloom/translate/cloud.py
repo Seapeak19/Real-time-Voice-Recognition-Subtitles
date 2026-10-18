@@ -18,6 +18,10 @@ from .base import Translator
 
 log = logging.getLogger(__name__)
 
+# Partial subtitles are disposable: a stalled request must not hold up newer
+# audio. The final line still gets the user's full timeout and retry budget.
+PARTIAL_TIMEOUT_SEC = 2.5
+
 _SYSTEM_PROMPT = """You are the translation engine of a live subtitle app.
 Translate the speaker's text from {source} into {target}.
 Rules:
@@ -65,11 +69,13 @@ class CloudTranslator(Translator):
         source: str,
         target: str,
         context: Sequence[tuple[str, str]],
+        *,
+        partial: bool = False,
     ) -> list[dict[str, str]]:
         src_name = language_name(source, "en")
         tgt_name = language_name(target, "en")
         system = _SYSTEM_PROMPT.format(source=src_name, target=tgt_name)
-        recent = list(context)[-3:]
+        recent = [] if partial else list(context)[-2:]
         if recent:
             lines = []
             for previous_source, previous_target in recent:
@@ -89,23 +95,38 @@ class CloudTranslator(Translator):
         source_lang: str,
         target_lang: str,
         context: Sequence[tuple[str, str]] = (),
+        *,
+        partial: bool = False,
     ) -> str:
         api_key = get_api_key()
         if not api_key:
             raise TranslationError(tr("未配置云端翻译 API Key。"))
         payload = {
             "model": self.config.model,
-            "messages": self._messages(text, source_lang, target_lang, context),
+            "messages": self._messages(
+                text, source_lang, target_lang, context, partial=partial
+            ),
             "temperature": 0.0,
             "max_tokens": max(96, min(800, len(text) * 4)),
             "stream": False,
         }
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        attempts = max(1, self.config.max_retries + 1)
+        attempts = 1 if partial else max(1, self.config.max_retries + 1)
+        timeout_sec = (
+            min(self.config.timeout_sec, PARTIAL_TIMEOUT_SEC)
+            if partial
+            else self.config.timeout_sec
+        )
+        request_timeout = httpx.Timeout(timeout_sec, connect=min(5.0, timeout_sec))
         last_error = "未知错误"
         for attempt in range(attempts):
             try:
-                response = self._client.post(self._endpoint(), json=payload, headers=headers)
+                response = self._client.post(
+                    self._endpoint(),
+                    json=payload,
+                    headers=headers,
+                    timeout=request_timeout,
+                )
                 if response.status_code in {408, 409, 429} or response.status_code >= 500:
                     last_error = f"HTTP {response.status_code}: {response.text[:180]}"
                     if attempt + 1 < attempts:
@@ -138,7 +159,7 @@ class CloudTranslator(Translator):
             except TranslationError:
                 raise
             except httpx.TimeoutException as exc:
-                last_error = f"请求超时（{self.config.timeout_sec:g}s）"
+                last_error = f"请求超时（{timeout_sec:g}s）"
                 if attempt + 1 < attempts:
                     time.sleep(0.4 * (attempt + 1))
                     continue

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 import respx
@@ -80,6 +82,47 @@ def test_retry_then_success(monkeypatch):
         finally:
             client.close()
     assert route.call_count == 2
+
+
+def test_partial_does_not_retry(monkeypatch):
+    monkeypatch.setenv("SUBLOOM_API_KEY", "sk-test")
+    with respx.mock:
+        route = respx.post("https://example.test/v1/chat/completions").mock(
+            return_value=httpx.Response(500, text="server error")
+        )
+        client = CloudTranslator(make_config(max_retries=3))
+        try:
+            with pytest.raises(TranslationError):
+                client.translate("Hello", "en", "zh", partial=True)
+        finally:
+            client.close()
+    assert route.call_count == 1
+
+
+def test_partial_omits_context(monkeypatch):
+    monkeypatch.setenv("SUBLOOM_API_KEY", "sk-test")
+    with respx.mock:
+        route = respx.post("https://example.test/v1/chat/completions").mock(
+            return_value=httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": "你好"}}]},
+            )
+        )
+        client = CloudTranslator(make_config())
+        try:
+            client.translate(
+                "Hello",
+                "en",
+                "zh",
+                context=(("Previous line", "上一句"),),
+                partial=True,
+            )
+        finally:
+            client.close()
+    payload = json.loads(route.calls[0].request.content)
+    user_text = payload["messages"][1]["content"]
+    assert "Recent context" not in user_text
+    assert "Previous line" not in user_text
 
 
 def test_clean_response_strips_labels_and_quotes():

@@ -61,6 +61,9 @@ class CaptionPipeline:
         self._last_partial_text: dict[str, str] = {}
         self._partial_translation_at: dict[str, float] = {}
         self._partial_translation_text: dict[str, str] = {}
+        self._partial_busy = False
+        self._partial_pending: dict[str, CaptionSegment] = {}
+        self._partial_translation_result: dict[str, tuple[str, str, str]] = {}
         self._recent_sources: deque[str] = deque(maxlen=3)
         self._context_pairs: deque[tuple[str, str]] = deque(maxlen=3)
         self._final_executor: ThreadPoolExecutor | None = None
@@ -121,6 +124,10 @@ class CaptionPipeline:
         self._last_partial_text.clear()
         self._partial_translation_at.clear()
         self._partial_translation_text.clear()
+        with self._state_lock:
+            self._partial_busy = False
+            self._partial_pending.clear()
+            self._partial_translation_result.clear()
         self._recent_sources.clear()
         self._context_pairs.clear()
         self._dropped_seconds = 0.0
@@ -359,11 +366,36 @@ class CaptionPipeline:
             segment.translated_text = text
             segment.translation_pending = False
             segment.translation_expected = False
+        elif expected:
+            # Show an existing translation immediately. Prefer an exact cached
+            # line; otherwise reuse this segment's latest partial result. The
+            # context-aware final request still runs and can refine it.
+            cached = self.translator.cached_translation(text, source, self._target_lang)
+            if cached is not None:
+                translated, provider = cached
+                segment.translated_text = translated
+                segment.provider = provider
+                segment.translation_pending = False
+                segment.translation_expected = False
+                log.debug("Showing cached final preview for %s", segment_id)
+            else:
+                with self._state_lock:
+                    partial_result = self._partial_translation_result.get(segment_id)
+                if partial_result is not None and _similar(partial_result[0], text):
+                    _, translated, provider = partial_result
+                    segment.translated_text = translated
+                    segment.provider = provider
+                    segment.translation_pending = False
+                    segment.translation_expected = False
+                    log.debug("Showing partial final preview for %s", segment_id)
         self._recent_sources.append(text)
         self._current_id = None
         self._last_partial_text.pop(segment_id, None)
         self._partial_translation_at.pop(segment_id, None)
         self._partial_translation_text.pop(segment_id, None)
+        with self._state_lock:
+            self._partial_pending.pop(segment_id, None)
+            self._partial_translation_result.pop(segment_id, None)
         self._emit(segment)
         if expected:
             context = list(self._context_pairs)
@@ -392,14 +424,49 @@ class CaptionPipeline:
             return
         self._partial_translation_at[segment.id] = now
         self._partial_translation_text[segment.id] = segment.source_text
+
+        # Keep at most one request in flight and one newest request waiting.
+        # A slow provider must not build a queue of partials that are already
+        # obsolete by the time their HTTP response arrives.
+        with self._state_lock:
+            if self._partial_busy:
+                self._partial_pending[segment.id] = replace(segment)
+                return
+            self._partial_busy = True
+        self._submit_partial(segment)
+
+    def _submit_partial(self, segment: CaptionSegment) -> None:
         executor = self._partial_executor
         if executor is None:
+            with self._state_lock:
+                self._partial_busy = False
             return
-        context = list(self._context_pairs)
         try:
-            executor.submit(self._translate_job, replace(segment), context)
+            executor.submit(self._run_partial_job, replace(segment))
         except RuntimeError:
-            pass
+            with self._state_lock:
+                self._partial_busy = False
+
+    def _run_partial_job(self, segment: CaptionSegment) -> None:
+        try:
+            with self._state_lock:
+                current = self._revision.get(segment.id) == segment.revision
+            if current:
+                # Partials fail soft: a transient provider error should not
+                # replace the overlay with an error or block the next update.
+                self._translate_job(segment, ())
+        finally:
+            next_segment: CaptionSegment | None = None
+            with self._state_lock:
+                self._partial_busy = False
+                while self._partial_pending:
+                    _, candidate = self._partial_pending.popitem()
+                    if self._revision.get(candidate.id) == candidate.revision:
+                        next_segment = candidate
+                        self._partial_busy = True
+                        break
+            if next_segment is not None:
+                self._submit_partial(next_segment)
 
     def _submit_final(self, segment: CaptionSegment, context: list[tuple[str, str]]) -> None:
         executor = self._final_executor
@@ -422,6 +489,8 @@ class CaptionPipeline:
             )
         except Exception as exc:
             log.warning("Translation failed for %s: %s", segment.id, exc)
+            if not segment.is_final:
+                return
             with self._state_lock:
                 if self._revision.get(segment.id) != segment.revision:
                     return
@@ -440,13 +509,20 @@ class CaptionPipeline:
             )
             if segment.is_final:
                 self._context_pairs.append((segment.source_text, translated))
+            else:
+                self._partial_translation_result[segment.id] = (
+                    segment.source_text,
+                    translated,
+                    provider,
+                )
         self._emit(updated)
         if segment.is_final:
             log.debug(
-                "Translated final %s in %.2fs (%s)",
+                "Translated final %s in %.2fs (%s, cache_hits=%d)",
                 segment.id,
                 time.monotonic() - started,
                 provider,
+                self.translator.cache_hits,
             )
 
     # ------------------------------------------------------------------ output
@@ -474,6 +550,10 @@ class CaptionPipeline:
             log.exception("Error callback failed")
 
     def _shutdown_executors(self) -> None:
+        with self._state_lock:
+            self._partial_busy = False
+            self._partial_pending.clear()
+            self._partial_translation_result.clear()
         partial, self._partial_executor = self._partial_executor, None
         final, self._final_executor = self._final_executor, None
         if partial is not None:
