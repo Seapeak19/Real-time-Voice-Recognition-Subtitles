@@ -1,6 +1,6 @@
 """SubLoom — real-time speech translation captions."""
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 APP_NAME = "SubLoom"
 APP_NAME_ZH = "织幕"

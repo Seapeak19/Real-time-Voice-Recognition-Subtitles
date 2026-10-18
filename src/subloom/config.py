@@ -80,6 +80,7 @@ class OverlayConfig:
     show_source: bool = False
     font_size: int = 26
     opacity: float = 0.84
+    hold_ms: int = 1800
     click_through: bool = False
     width: int = 1000
     x: int | None = None
@@ -129,6 +130,7 @@ class AppConfig:
         self.translation.cloud.max_retries = min(3, max(0, int(self.translation.cloud.max_retries)))
         self.translation.local.beam_size = min(8, max(1, int(self.translation.local.beam_size)))
         self.overlay.font_size = min(64, max(12, int(self.overlay.font_size)))
+        self.overlay.hold_ms = min(4000, max(800, int(self.overlay.hold_ms)))
         self.overlay.opacity = min(1.0, max(0.2, float(self.overlay.opacity)))
         self.overlay.width = min(2400, max(420, int(self.overlay.width)))
         if self.overlay.x is not None:

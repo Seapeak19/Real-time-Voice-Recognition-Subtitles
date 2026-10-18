@@ -246,6 +246,10 @@ EN: dict[str, str] = {
     "正文字号": "Subtitle font size",
     "背景不透明度": "Background opacity",
     "字幕窗宽度": "Overlay width",
+    "最短停留": "Minimum hold",
+    "保证一句译文至少显示这么久，避免还没看完就被下一句替换。": (
+        "Keep each translation visible at least this long so the next line cannot replace it before you finish reading."
+    ),
     "恢复默认位置": "Reset position",
     "位置": "Position",
     "提示：可以直接拖动悬浮字幕窗；右键可快速调整字号或隐藏。": "Tip: drag the overlay directly; right-click to adjust size or hide it.",

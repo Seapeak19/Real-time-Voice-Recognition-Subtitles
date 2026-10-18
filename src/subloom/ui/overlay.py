@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import time
+from collections import deque
+from dataclasses import replace
 
 from PySide6.QtCore import QPoint, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QGuiApplication, QLinearGradient, QPainter, QPen
@@ -28,6 +31,13 @@ class SubtitleOverlay(QWidget):
         self._segment: CaptionSegment | None = None
         self._last_translation_text = ""
         self._last_translation_id = ""
+        self._current_final: CaptionSegment | None = None
+        self._current_final_shown_at = 0.0
+        self._final_queue: deque[CaptionSegment] = deque(maxlen=2)
+        self._seen_final_ids: set[str] = set()
+        self._hold_timer = QTimer(self)
+        self._hold_timer.setSingleShot(True)
+        self._hold_timer.timeout.connect(self._on_hold_expired)
         self._drag_origin: QPoint | None = None
         self._window_origin: QPoint | None = None
         self._fitted_height = 0
@@ -109,6 +119,87 @@ class SubtitleOverlay(QWidget):
 
     # ------------------------------------------------------------------ text
     def set_segment(self, segment: CaptionSegment) -> None:
+        """Show finalized lines only, with a minimum reading time.
+
+        Partial results still churn quickly, especially on fast speech. Showing
+        them here makes a stable translation disappear before it can be read.
+        The main window can keep showing partials; the overlay is for reading.
+        """
+        translated = segment.translated_text.strip()
+        failed = bool(segment.warning)
+
+        if not segment.is_final:
+            if self._current_final is not None:
+                return
+            if segment.translation_expected or segment.translation_pending:
+                self._render_segment(
+                    replace(
+                        segment,
+                        translated_text="",
+                        translation_pending=True,
+                        translation_expected=True,
+                    )
+                )
+            else:
+                self._render_segment(segment)
+            return
+
+        if not translated and not failed:
+            if self._current_final is None:
+                self._render_segment(
+                    replace(segment, translation_pending=True, translation_expected=True)
+                )
+            return
+
+        if self._current_final is not None and self._current_final.id == segment.id:
+            # A cached preview followed by the context-refined final: update in
+            # place and keep the reading clock, so the hold does not restart.
+            old_length = len(self._current_final.translated_text.strip())
+            self._current_final = segment
+            self._render_segment(segment)
+            if len(segment.translated_text.strip()) > old_length:
+                self._current_final_shown_at = time.monotonic()
+                self._hold_timer.start(int(self._hold_seconds(segment) * 1000))
+            return
+
+        for index, queued in enumerate(self._final_queue):
+            if queued.id == segment.id:
+                self._final_queue[index] = segment
+                return
+
+        # A very late refinement of a line that has already been replaced must
+        # not bring that old line back after the next sentence is on screen.
+        if segment.id in self._seen_final_ids:
+            return
+        self._seen_final_ids.add(segment.id)
+        self._final_queue.append(segment)
+        self._maybe_show_next_final()
+
+    def _hold_seconds(self, segment: CaptionSegment) -> float:
+        text = segment.translated_text.strip() or segment.source_text.strip()
+        chars = len("".join(text.split()))
+        return min(4.5, max(self.config.hold_ms / 1000.0, chars / 9.0))
+
+    def _maybe_show_next_final(self) -> None:
+        if self._current_final is not None:
+            elapsed = time.monotonic() - self._current_final_shown_at
+            remaining = self._hold_seconds(self._current_final) - elapsed
+            if remaining > 0:
+                self._hold_timer.start(max(1, int(remaining * 1000)))
+                return
+        if not self._final_queue:
+            self._hold_timer.stop()
+            return
+        segment = self._final_queue.popleft()
+        self._current_final = segment
+        self._current_final_shown_at = time.monotonic()
+        self._render_segment(segment)
+        self._hold_timer.start(int(self._hold_seconds(segment) * 1000))
+
+    def _on_hold_expired(self) -> None:
+        self._maybe_show_next_final()
+
+    def _render_segment(self, segment: CaptionSegment) -> None:
         self._segment = segment
         translated = segment.translated_text.strip()
         source = segment.source_text.strip()
@@ -201,6 +292,11 @@ class SubtitleOverlay(QWidget):
             self._refit()
 
     def clear(self) -> None:
+        self._hold_timer.stop()
+        self._current_final = None
+        self._current_final_shown_at = 0.0
+        self._final_queue.clear()
+        self._seen_final_ids.clear()
         self._segment = None
         self._last_translation_text = ""
         self._last_translation_id = ""

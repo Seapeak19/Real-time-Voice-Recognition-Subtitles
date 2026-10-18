@@ -425,6 +425,15 @@ class SettingsDialog(QDialog):
         self._width_slider, self._width_label = self._slider_row(
             form, tr("字幕窗宽度"), 600, 1600, self.config.overlay.width, " px"
         )
+        self._hold_slider, self._hold_label = self._slider_row(
+            form,
+            tr("最短停留"),
+            800,
+            3000,
+            self.config.overlay.hold_ms,
+            " ms",
+            tr("保证一句译文至少显示这么久，避免还没看完就被下一句替换。"),
+        )
         reset = QPushButton(tr("恢复默认位置"))
         reset.setObjectName("SecondaryButton")
         reset.clicked.connect(lambda: self._reset_position(True))
@@ -709,6 +718,7 @@ class SettingsDialog(QDialog):
         ov.font_size = int(self._font_slider.value())
         ov.opacity = max(0.3, min(1.0, self._opacity_slider.value() / 100.0))
         ov.width = int(self._width_slider.value())
+        ov.hold_ms = int(self._hold_slider.value())
         if getattr(self, "_reset_pos_requested", False):
             ov.x = None
             ov.y = None

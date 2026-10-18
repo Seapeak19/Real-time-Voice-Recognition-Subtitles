@@ -38,7 +38,7 @@ def test_invalid_values_are_clamped(tmp_path: Path):
     target = tmp_path / "config.json"
     target.write_text(
         '{"translation": {"target_lang": "xx", "provider": "bogus"},'
-        ' "overlay": {"font_size": 999, "opacity": 4},'
+        ' "overlay": {"font_size": 999, "opacity": 4, "hold_ms": 9999},'
         ' "asr": {"silence_ms": 10}, "ui": {"language": "fr"}}',
         encoding="utf-8",
     )
@@ -46,6 +46,7 @@ def test_invalid_values_are_clamped(tmp_path: Path):
     assert config.translation.target_lang == "zh"
     assert config.translation.provider == "auto"
     assert config.overlay.font_size == 64
+    assert config.overlay.hold_ms == 4000
     assert config.overlay.opacity == 1.0
     assert config.asr.silence_ms == 200
     assert config.ui.language == "zh"

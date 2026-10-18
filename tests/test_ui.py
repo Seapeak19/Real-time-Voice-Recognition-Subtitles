@@ -182,8 +182,122 @@ def test_overlay_keeps_previous_translation_while_next_one_is_pending(qtbot):
         )
     )
     assert overlay._translation.text() == "第一句"
-    assert "翻译" in overlay._hint.text()
+    assert overlay._hint.text() == ""
     assert overlay._source.text() == ""
+
+
+def test_overlay_holds_final_before_showing_next(qtbot):
+    config = make_config()
+    config.overlay.hold_ms = 800
+    overlay = SubtitleOverlay(config.overlay)
+    qtbot.addWidget(overlay)
+    first = CaptionSegment(
+        id="hold-1",
+        source_text="First sentence",
+        translated_text="第一句",
+        source_lang="en",
+        target_lang="zh",
+        start=0,
+        end=1,
+        is_final=True,
+        revision=1,
+    )
+    second = CaptionSegment(
+        id="hold-2",
+        source_text="Second sentence",
+        translated_text="第二句",
+        source_lang="en",
+        target_lang="zh",
+        start=1,
+        end=2,
+        is_final=True,
+        revision=1,
+    )
+    overlay.set_segment(first)
+    overlay.set_segment(second)
+    assert overlay._translation.text() == "第一句"
+    qtbot.wait(1000)
+    assert overlay._translation.text() == "第二句"
+
+
+def test_overlay_ignores_partial_updates_while_final_is_visible(qtbot):
+    config = make_config()
+    config.overlay.hold_ms = 800
+    overlay = SubtitleOverlay(config.overlay)
+    qtbot.addWidget(overlay)
+    overlay.set_segment(
+        CaptionSegment(
+            id="stable-1",
+            source_text="First sentence",
+            translated_text="第一句完整译文",
+            source_lang="en",
+            target_lang="zh",
+            start=0,
+            end=1,
+            is_final=True,
+            revision=1,
+        )
+    )
+    overlay.set_segment(
+        CaptionSegment(
+            id="partial-2",
+            source_text="Second partial",
+            translated_text="第二句局部",
+            source_lang="en",
+            target_lang="zh",
+            start=1,
+            end=2,
+            is_final=False,
+            revision=1,
+        )
+    )
+    assert overlay._translation.text() == "第一句完整译文"
+
+
+def test_overlay_ignores_late_refinement_of_replaced_line(qtbot):
+    config = make_config()
+    config.overlay.hold_ms = 800
+    overlay = SubtitleOverlay(config.overlay)
+    qtbot.addWidget(overlay)
+    first = CaptionSegment(
+        id="late-refine",
+        source_text="First sentence",
+        translated_text="第一句",
+        source_lang="en",
+        target_lang="zh",
+        start=0,
+        end=1,
+        is_final=True,
+        revision=1,
+    )
+    second = CaptionSegment(
+        id="late-refine-2",
+        source_text="Second sentence",
+        translated_text="第二句",
+        source_lang="en",
+        target_lang="zh",
+        start=1,
+        end=2,
+        is_final=True,
+        revision=1,
+    )
+    overlay.set_segment(first)
+    qtbot.wait(900)
+    overlay.set_segment(second)
+    overlay.set_segment(
+        CaptionSegment(
+            id="late-refine",
+            source_text="First sentence",
+            translated_text="第一句精修后",
+            source_lang="en",
+            target_lang="zh",
+            start=0,
+            end=1,
+            is_final=True,
+            revision=2,
+        )
+    )
+    assert overlay._translation.text() == "第二句"
 
 
 def test_caption_card_pending_does_not_render_source_as_translation(qtbot):
