@@ -721,8 +721,18 @@ class SettingsDialog(QDialog):
         link.setOpenExternalLinks(True)
         link.setStyleSheet(f"color: {theme.ACCENT};")
         layout.addWidget(link)
+        wizard_btn = QPushButton(tr("重新运行设置向导"))
+        wizard_btn.setObjectName("SecondaryButton")
+        wizard_btn.clicked.connect(self._rerun_setup_wizard)
+        layout.addWidget(wizard_btn)
         layout.addStretch(1)
         return page
+
+    def _rerun_setup_wizard(self) -> None:
+        parent = self.parent()
+        self.reject()
+        if parent is not None and hasattr(parent, "show_setup_wizard"):
+            parent.show_setup_wizard()
 
     # ------------------------------------------------------------------ status
     def _refresh_asr_status(self) -> None:

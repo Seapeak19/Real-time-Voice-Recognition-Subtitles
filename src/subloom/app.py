@@ -127,6 +127,9 @@ def main(argv: list[str] | None = None) -> int:
         log.exception("Could not load config")
         config = AppConfig()
     set_language(config.ui.language)
+    if args.smoke_test:
+        # CI smoke tests must not block on the first-run modal wizard.
+        config.first_run = False
     window = MainWindow(config)
     window.show()
     if args.smoke_test:

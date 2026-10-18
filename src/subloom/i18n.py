@@ -167,6 +167,77 @@ EN: dict[str, str] = {
     ),
     "识别": "Recognition",
     "字幕": "Subtitles",
+    "SubLoom 设置向导": "SubLoom Setup",
+    "欢迎使用 SubLoom 织幕": "Welcome to SubLoom",
+    "三步完成设置：选择声音、配置翻译、确认识别设备。之后都可以在设置中修改。": (
+        "Three quick steps: choose audio, configure translation, confirm recognition. Everything can be changed later in Settings."
+    ),
+    "实时识别语音，并把翻译字幕显示在置顶悬浮窗中。": (
+        "Recognize speech live and show translated subtitles in an always-on-top overlay."
+    ),
+    "音频默认不上传，语音识别在本机完成。": "Audio stays on-device by default; speech recognition runs locally.",
+    "翻译可使用云端 API，也可以下载本地模型离线运行。": (
+        "Translation can use a cloud API or an optional offline local model."
+    ),
+    "悬浮字幕可以拖动、调字体/颜色，并停留足够时间供阅读。": (
+        "The overlay is draggable, supports custom fonts/colors, and holds each line long enough to read."
+    ),
+    "上一步": "Back",
+    "下一步": "Next",
+    "完成": "Finish",
+    "选择音频来源": "Choose audio source",
+    "先选系统声音或麦克风；也可以稍后在主界面切换到媒体文件。": (
+        "Choose system audio or a microphone; you can switch to a media file later."
+    ),
+    "系统声音（推荐）": "System audio (recommended)",
+    "媒体文件（稍后选择）": "Media file (choose later)",
+    "在主界面选择媒体文件": "Choose a media file in the main window",
+    "向导只保存文件模式；具体文件在主界面选择。": (
+        "The wizard only saves file mode; choose the actual file in the main window."
+    ),
+    "设备": "Device",
+    "刷新设备": "Refresh devices",
+    "适合现场讲话、会议发言和课堂；请在系统设置中确认麦克风权限。": (
+        "Best for live speech, meetings and classrooms; check microphone permission in system settings."
+    ),
+    "Windows 上系统声音通过 WASAPI 回环捕获，无需安装虚拟声卡。": (
+        "On Windows, system audio is captured through WASAPI loopback; no virtual cable is required."
+    ),
+    "推荐使用云端 API；没有 API 时可下载本地模型完全离线运行。": (
+        "A cloud API is recommended; without one you can download the local model for fully offline use."
+    ),
+    "自动（有云端 Key 时优先云端）": "Auto (cloud when a key is set)",
+    "本地模型约 650MB，需要单独下载；不下载也可以先使用云端。": (
+        "The local model is about 650 MB and must be downloaded separately; cloud works without it."
+    ),
+    "Key 只保存在系统钥匙串；翻译时只发送识别后的文本。": (
+        "The key is stored in the system keychain; only recognized text is sent for translation."
+    ),
+    "识别与性能": "Recognition & performance",
+    "第一次开始字幕时会自动下载识别模型。": "The recognition model downloads automatically the first time you start.",
+    "自动（GPU 用 large-v3-turbo）": "Auto (large-v3-turbo on GPU)",
+    "保持“自动选择”即可；模型会保存到用户数据目录，不会进入 Git 仓库。": (
+        "Keep Auto selected; models are stored in the user data directory and never enter the Git repository."
+    ),
+    "准备完成": "Ready",
+    "确认下面的设置，之后可以随时在设置中修改。": (
+        "Review these settings; you can change them later at any time."
+    ),
+    "点击“完成”后，选择音频来源并点击主界面的“开始字幕”。": (
+        'After clicking Finish, choose an audio source and click "Start subtitles" in the main window.'
+    ),
+    "音频来源：{source}\n目标语言：{target}\n翻译方式：{provider}\n计算设备：{device}": (
+        "Audio: {source}\nTarget language: {target}\nTranslation: {provider}\nCompute device: {device}"
+    ),
+    "请填写云端 API 地址和模型名。": "Enter the cloud API URL and model name.",
+    "保存失败": "Save failed",
+    "无法保存 API Key": "Could not save API key",
+    "无法写入系统钥匙串：{error}": "Could not write to the system keychain: {error}",
+    "设置向导已完成，可以开始字幕了": "Setup complete. You can start subtitles now.",
+    "已跳过设置向导，可随时在设置中调整音频和翻译": (
+        "Setup was skipped; you can adjust audio and translation in Settings at any time."
+    ),
+    "重新运行设置向导": "Run setup again",
     "自定义": "Custom",
     "术语与固定译文": "Glossary & fixed translations",
     "整句匹配时直接使用右侧译文；术语会作为云端翻译偏好，并在结果中替换同名原文。修改会在下次开始字幕时生效。": (
@@ -218,7 +289,6 @@ EN: dict[str, str] = {
     "本地模型未下载。": "Local model is not downloaded.",
     "下载本地模型": "Download local model",
     "重新检查": "Check again",
-    "自动（有云端 Key 时优先云端）": "Auto (cloud when a key is set)",
     "本地 NLLB 模型": "Local NLLB model",
     "仅识别，不翻译": "Recognize only",
     "说话过程中也翻译（更实时，云端会增加调用次数）": "Translate partials too (more real-time; more cloud calls)",

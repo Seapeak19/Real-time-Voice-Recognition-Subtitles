@@ -1155,12 +1155,33 @@ class MainWindow(QMainWindow):
     def _maybe_first_run(self) -> None:
         if not self.config.first_run:
             return
-        self.config.first_run = False
-        try:
-            save_config(self.config)
-        except OSError:
-            pass
-        self._status_text.setText(tr("首次使用：建议先在「设置 → 翻译」中配置服务"))
+        self.show_setup_wizard(first_run=True)
+
+    def show_setup_wizard(self, *, first_run: bool = False) -> None:
+        from .setup_wizard import SetupWizard
+
+        wizard = SetupWizard(self.config, self)
+        accepted = bool(wizard.exec())
+        if accepted:
+            self.config = wizard.config
+            self.config.first_run = False
+            try:
+                save_config(self.config)
+            except OSError as exc:
+                log.warning("Could not save setup wizard config: %s", exc)
+            self._apply_config_to_ui()
+            self._refresh_engine_hint()
+            self._update_model_badge()
+            self._status_text.setText(tr("设置向导已完成，可以开始字幕了"))
+        elif first_run:
+            self.config.first_run = False
+            try:
+                save_config(self.config)
+            except OSError:
+                pass
+            self._status_text.setText(
+                tr("已跳过设置向导，可随时在设置中调整音频和翻译")
+            )
 
     # ------------------------------------------------------------------ geometry
     def _restore_geometry(self) -> None:
