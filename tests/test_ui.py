@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QTabWidget
 
 from subloom.config import AppConfig
@@ -63,7 +64,7 @@ def test_settings_dialog_has_tabs(qtbot):
     qtbot.addWidget(dialog)
     tabs = dialog.findChild(QTabWidget)
     assert tabs is not None
-    assert tabs.count() == 5
+    assert tabs.count() == 6
 
 
 def test_english_interface(qtbot):
@@ -83,8 +84,8 @@ def test_english_interface(qtbot):
     qtbot.addWidget(dialog)
     tabs = dialog.findChild(QTabWidget)
     assert tabs is not None
-    assert tabs.tabText(3) == "Interface"
-    assert tabs.tabText(4) == "About"
+    assert tabs.tabText(4) == "Interface"
+    assert tabs.tabText(5) == "About"
 
 
 def test_interface_language_can_be_saved(qtbot):
@@ -124,6 +125,43 @@ def test_numeric_setting_inputs_sync_with_sliders(qtbot):
         assert not numeric_input.lineEdit().isReadOnly()
         assert numeric_input.minimum() == slider.minimum()
         assert numeric_input.maximum() == slider.maximum()
+
+
+def test_overlay_style_and_glossary_settings(qtbot):
+    config = make_config()
+    dialog = SettingsDialog(config)
+    qtbot.addWidget(dialog)
+    dialog._font_combo.setCurrentFont(QFont("Arial"))
+    dialog._set_color_button(dialog._text_color_button, "#112233")
+    dialog._set_color_button(dialog._background_color_button, "#445566")
+    dialog._set_color_button(dialog._shadow_color_button, "#778899")
+    dialog._alignment_combo.setCurrentIndex(
+        dialog._alignment_combo.findData("left")
+    )
+    dialog._shadow_check.setChecked(False)
+    dialog._add_glossary_row("API", "接口")
+    expected_family = dialog._font_combo.currentFont().family()
+    dialog._apply()
+    overlay = dialog.config.overlay
+    assert overlay.font_family == expected_family
+    assert overlay.text_color == "#112233"
+    assert overlay.background_color == "#445566"
+    assert overlay.shadow_color == "#778899"
+    assert overlay.alignment == "left"
+    assert overlay.shadow is False
+    assert dialog.config.translation.glossary == {"API": "接口"}
+
+
+def test_external_cue_displays_in_overlay(qtbot):
+    config = make_config()
+    config.overlay.enabled = True
+    window = MainWindow(config)
+    qtbot.addWidget(window)
+    window._external_active = True
+    window._on_external_cue("外部字幕测试", 0)
+    assert window._overlay._translation.text() == "外部字幕测试"
+    window._stop_external_subtitles()
+    assert window._overlay._translation.text() == ""
 
 
 def test_overlay_updates(qtbot):

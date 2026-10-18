@@ -29,11 +29,14 @@ _CACHE_LIMIT = 256
 _TRAILING_PUNCTUATION = re.compile(r"[\s.,!?;:，。！？；：、]+$")
 
 
+def _normalize_phrase(text: str) -> str:
+    normalized = " ".join((text or "").split())
+    return _TRAILING_PUNCTUATION.sub("", normalized).casefold()
+
+
 def _cache_key(text: str, source: str, target: str) -> tuple[str, str, str]:
     """Normalize harmless differences so final text can reuse a partial result."""
-    normalized = " ".join(text.split())
-    normalized = _TRAILING_PUNCTUATION.sub("", normalized).casefold()
-    return normalized, source, target
+    return _normalize_phrase(text), source, target
 
 
 @dataclass(slots=True)
@@ -52,6 +55,24 @@ class TranslationService:
         self._cache: OrderedDict[tuple[str, str, str], tuple[str, str]] = OrderedDict()
         self._cache_lock = threading.Lock()
         self._cache_hits = 0
+        self._glossary = tuple(
+            (str(source).strip(), str(target).strip())
+            for source, target in (self.config.glossary or {}).items()
+            if str(source).strip() and str(target).strip()
+        )
+        self._custom = {
+            _normalize_phrase(source): target for source, target in self._glossary
+        }
+
+    def _custom_translation(self, text: str) -> str | None:
+        key = _normalize_phrase(text)
+        return self._custom.get(key) if key else None
+
+    def _apply_glossary(self, translated: str) -> str:
+        for source, target in self._glossary:
+            if source and source in translated:
+                translated = translated.replace(source, target)
+        return translated
 
     @property
     def cache_hits(self) -> int:
@@ -170,6 +191,9 @@ class TranslationService:
         target = normalize_code(target_lang)
         if not source or source == target:
             return text, "none", False, ""
+        custom = self._custom_translation(text)
+        if custom is not None:
+            return custom, "custom", False, ""
         provider = self.selected_provider()
         if provider == "off":
             return "", "off", False, ""
@@ -192,8 +216,14 @@ class TranslationService:
         if provider == "cloud":
             try:
                 translated = self.cloud.translate(
-                    text, source, target, context, partial=partial
+                    text,
+                    source,
+                    target,
+                    context,
+                    partial=partial,
+                    glossary=self._glossary,
                 )
+                translated = self._apply_glossary(translated)
                 self._cache_put(key, (translated, "cloud"))
                 return translated, "cloud", False, ""
             except TranslationError as exc:
@@ -203,12 +233,16 @@ class TranslationService:
                 if partial or not local_model_available(self.config.local):
                     raise
                 log.warning("Cloud translation failed, falling back to local: %s", exc)
-                translated = self.local.translate(text, source, target, context)
+                translated = self._apply_glossary(
+                    self.local.translate(text, source, target, context)
+                )
                 self._cache_put(key, (translated, "local"))
                 return translated, "local", True, tr(
                     "云端失败，已切换本地翻译：{error}", error=exc
                 )
-        translated = self.local.translate(text, source, target, context)
+        translated = self._apply_glossary(
+            self.local.translate(text, source, target, context)
+        )
         self._cache_put(key, (translated, "local"))
         return translated, "local", False, ""
 
@@ -216,6 +250,7 @@ class TranslationService:
         labels = {
             "cloud": tr("云端翻译"),
             "local": tr("本地翻译"),
+            "custom": tr("自定义字幕"),
             "off": tr("仅原文"),
             "none": tr("未配置"),
         }

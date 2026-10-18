@@ -7,15 +7,22 @@ import logging
 from dataclasses import replace
 
 from PySide6.QtCore import QEventLoop, Qt, QThread, Signal
+from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QCheckBox,
+    QColorDialog,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
+    QFontComboBox,
     QFormLayout,
+    QFrame,
+    QGraphicsDropShadowEffect,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -24,6 +31,8 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSlider,
     QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -37,7 +46,7 @@ from ..asr.whisper_engine import (
     model_available,
     resolve_model,
 )
-from ..config import AppConfig, CloudConfig
+from ..config import AppConfig, CloudConfig, OverlayConfig
 from ..i18n import UI_LANGUAGES, language_choice_label, tr
 from ..languages import TARGET_LANGUAGES
 from ..secrets import get_api_key, mask_key, set_api_key
@@ -100,6 +109,7 @@ class SettingsDialog(QDialog):
         tabs.addTab(self._wrap(self._build_asr_tab()), tr("识别"))
         tabs.addTab(self._wrap(self._build_translation_tab()), tr("翻译"))
         tabs.addTab(self._wrap(self._build_overlay_tab()), tr("字幕"))
+        tabs.addTab(self._wrap(self._build_custom_tab()), tr("自定义"))
         tabs.addTab(self._wrap(self._build_interface_tab()), tr("界面"))
         tabs.addTab(self._wrap(self._build_about_tab()), tr("关于"))
         root.addWidget(tabs, 1)
@@ -416,6 +426,54 @@ class SettingsDialog(QDialog):
         page = QWidget()
         form = self._form()
         page.setLayout(form)
+
+        self._preview_frame = QFrame()
+        self._preview_frame.setObjectName("SubtitlePreview")
+        self._preview_frame.setMinimumHeight(96)
+        preview_layout = QVBoxLayout(self._preview_frame)
+        preview_layout.setContentsMargins(16, 12, 16, 12)
+        self._preview_label = QLabel(tr("字幕预览：每一句话，都值得被看见。"))
+        self._preview_label.setWordWrap(True)
+        preview_layout.addWidget(self._preview_label)
+        form.addRow(self._preview_frame)
+
+        self._font_combo = QFontComboBox()
+        if self.config.overlay.font_family:
+            self._font_combo.setCurrentFont(QFont(self.config.overlay.font_family))
+        else:
+            self._font_combo.setCurrentFont(self.font())
+        self._font_combo.currentFontChanged.connect(self._update_overlay_preview)
+        form.addRow(tr("字体"), self._font_combo)
+
+        self._text_color_button = self._color_button(
+            self.config.overlay.text_color, tr("文字颜色")
+        )
+        form.addRow(tr("文字颜色"), self._text_color_button)
+        self._background_color_button = self._color_button(
+            self.config.overlay.background_color, tr("背景颜色")
+        )
+        form.addRow(tr("背景颜色"), self._background_color_button)
+
+        self._alignment_combo = QComboBox()
+        for value, label in (
+            ("left", tr("左对齐")),
+            ("center", tr("居中")),
+            ("right", tr("右对齐")),
+        ):
+            self._alignment_combo.addItem(label, value)
+        self._set_combo(self._alignment_combo, self.config.overlay.alignment)
+        self._alignment_combo.currentIndexChanged.connect(self._update_overlay_preview)
+        form.addRow(tr("对齐方式"), self._alignment_combo)
+
+        self._shadow_check = QCheckBox(tr("文字阴影（提高复杂背景上的可读性）"))
+        self._shadow_check.setChecked(self.config.overlay.shadow)
+        self._shadow_check.toggled.connect(self._update_overlay_preview)
+        form.addRow("", self._shadow_check)
+        self._shadow_color_button = self._color_button(
+            self.config.overlay.shadow_color, tr("阴影颜色")
+        )
+        form.addRow(tr("阴影颜色"), self._shadow_color_button)
+
         self._overlay_enabled = QCheckBox(tr("启动字幕时显示悬浮字幕窗"))
         self._overlay_enabled.setChecked(self.config.overlay.enabled)
         form.addRow("", self._overlay_enabled)
@@ -430,9 +488,11 @@ class SettingsDialog(QDialog):
         self._font_slider, self._font_input = self._slider_row(
             form, tr("正文字号"), 14, 48, self.config.overlay.font_size, " px"
         )
+        self._font_slider.valueChanged.connect(self._update_overlay_preview)
         self._opacity_slider, self._opacity_input = self._slider_row(
             form, tr("背景不透明度"), 30, 100, int(self.config.overlay.opacity * 100), " %"
         )
+        self._opacity_slider.valueChanged.connect(self._update_overlay_preview)
         self._width_slider, self._width_input = self._slider_row(
             form, tr("字幕窗宽度"), 600, 1600, self.config.overlay.width, " px"
         )
@@ -445,6 +505,10 @@ class SettingsDialog(QDialog):
             " ms",
             tr("保证一句译文至少显示这么久，避免还没看完就被下一句替换。"),
         )
+        reset_style = QPushButton(tr("恢复字幕默认样式"))
+        reset_style.setObjectName("SecondaryButton")
+        reset_style.clicked.connect(self._reset_overlay_style)
+        form.addRow("", reset_style)
         reset = QPushButton(tr("恢复默认位置"))
         reset.setObjectName("SecondaryButton")
         reset.clicked.connect(lambda: self._reset_position(True))
@@ -454,10 +518,158 @@ class SettingsDialog(QDialog):
         hint.setObjectName("Hint")
         hint.setWordWrap(True)
         form.addRow(hint)
+        self._update_overlay_preview()
         return page
+
+    def _color_button(self, value: str, title: str) -> QPushButton:
+        button = QPushButton()
+        button.setFixedWidth(112)
+        button.setCursor(Qt.PointingHandCursor)
+        button.setToolTip(tr("点击选择颜色"))
+        button.clicked.connect(lambda: self._pick_color(button, title))
+        self._set_color_button(button, value)
+        return button
+
+    def _set_color_button(self, button: QPushButton, value: str) -> None:
+        color = QColor(value)
+        text_color = "#FFFFFF" if color.lightness() < 135 else "#111111"
+        button.setProperty("colorValue", value)
+        button.setText(value.upper())
+        button.setStyleSheet(
+            f"QPushButton {{ background: {value}; color: {text_color};"
+            " border: 1px solid #8A8A8A;"
+            " border-radius: 7px; padding: 4px 8px; font-weight: 600; }"
+        )
+
+    def _pick_color(self, button: QPushButton, title: str) -> None:
+        current = QColor(str(button.property("colorValue") or "#FFFFFF"))
+        color = QColorDialog.getColor(current, self, title)
+        if color.isValid():
+            self._set_color_button(button, color.name())
+            self._update_overlay_preview()
+
+    def _reset_overlay_style(self) -> None:
+        defaults = OverlayConfig()
+        self._font_combo.setCurrentFont(self.font())
+        self._set_color_button(self._text_color_button, defaults.text_color)
+        self._set_color_button(self._background_color_button, defaults.background_color)
+        self._set_color_button(self._shadow_color_button, defaults.shadow_color)
+        self._set_combo(self._alignment_combo, defaults.alignment)
+        self._shadow_check.setChecked(defaults.shadow)
+        self._font_slider.setValue(defaults.font_size)
+        self._opacity_slider.setValue(int(defaults.opacity * 100))
+        self._update_overlay_preview()
+
+    def _update_overlay_preview(self, *_args) -> None:
+        if not hasattr(self, "_preview_label"):
+            return
+        family = self._font_combo.currentFont().family()
+        size = int(self._font_slider.value())
+        text_color = str(self._text_color_button.property("colorValue") or "#FAF8FF")
+        background = QColor(
+            str(self._background_color_button.property("colorValue") or "#07060C")
+        )
+        background.setAlphaF(min(1.0, max(0.2, self._opacity_slider.value() / 100.0)))
+        self._preview_frame.setStyleSheet(
+            "QFrame#SubtitlePreview {"
+            f" background: rgba({background.red()}, {background.green()},"
+            f" {background.blue()}, {background.alpha()});"
+            " border: 1px solid rgba(155,108,255,0.35); border-radius: 12px; }"
+        )
+        preview_font = QFont(family)
+        preview_font.setPixelSize(min(30, max(16, size)))
+        preview_font.setWeight(QFont.DemiBold)
+        self._preview_label.setFont(preview_font)
+        self._preview_label.setStyleSheet(
+            f"color: {text_color}; background: transparent; font-weight: 600;"
+        )
+        alignment = {
+            "left": Qt.AlignLeft | Qt.AlignVCenter,
+            "center": Qt.AlignHCenter | Qt.AlignVCenter,
+            "right": Qt.AlignRight | Qt.AlignVCenter,
+        }.get(self._alignment_combo.currentData(), Qt.AlignHCenter | Qt.AlignVCenter)
+        self._preview_label.setAlignment(alignment)
+        if self._shadow_check.isChecked():
+            effect = QGraphicsDropShadowEffect(self._preview_label)
+            effect.setBlurRadius(10)
+            effect.setOffset(0, 2)
+            effect.setColor(
+                QColor(str(self._shadow_color_button.property("colorValue") or "#000000"))
+            )
+            self._preview_label.setGraphicsEffect(effect)
+        else:
+            self._preview_label.setGraphicsEffect(None)
 
     def _reset_position(self, requested: bool) -> None:
         self._reset_pos_requested = requested
+
+    # ------------------------------------------------------------------ custom
+    def _build_custom_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(14, 18, 14, 18)
+        layout.setSpacing(10)
+
+        title = QLabel(tr("术语与固定译文"))
+        title.setStyleSheet(f"font-size: 15px; font-weight: 700; color: {theme.TEXT};")
+        layout.addWidget(title)
+        hint = QLabel(
+            tr(
+                "整句匹配时直接使用右侧译文；术语会作为云端翻译偏好，并在结果中替换同名原文。"
+                "修改会在下次开始字幕时生效。"
+            )
+        )
+        hint.setObjectName("Hint")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        self._glossary_table = QTableWidget(0, 2)
+        self._glossary_table.setHorizontalHeaderLabels(
+            (tr("原文（整句或术语）"), tr("自定义译文"))
+        )
+        self._glossary_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.Stretch
+        )
+        self._glossary_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.Stretch
+        )
+        self._glossary_table.verticalHeader().setVisible(False)
+        self._glossary_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._glossary_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self._glossary_table.setMinimumHeight(280)
+        for source, target in self.config.translation.glossary.items():
+            self._add_glossary_row(source, target)
+        layout.addWidget(self._glossary_table, 1)
+
+        row = QHBoxLayout()
+        add = QPushButton(tr("添加一行"))
+        add.setObjectName("SecondaryButton")
+        add.clicked.connect(lambda: self._add_glossary_row())
+        remove = QPushButton(tr("删除选中"))
+        remove.setObjectName("GhostButton")
+        remove.clicked.connect(lambda: self._remove_glossary_rows())
+        row.addWidget(add)
+        row.addWidget(remove)
+        row.addStretch(1)
+        layout.addLayout(row)
+        return page
+
+    def _add_glossary_row(self, source: str = "", target: str = "") -> None:
+        row = self._glossary_table.rowCount()
+        self._glossary_table.insertRow(row)
+        self._glossary_table.setItem(row, 0, QTableWidgetItem(source))
+        self._glossary_table.setItem(row, 1, QTableWidgetItem(target))
+        self._glossary_table.setCurrentCell(row, 0 if not source else 1)
+        if self._glossary_table.isVisible():
+            self._glossary_table.editItem(self._glossary_table.item(row, 0))
+
+    def _remove_glossary_rows(self) -> None:
+        rows = sorted(
+            {index.row() for index in self._glossary_table.selectedIndexes()},
+            reverse=True,
+        )
+        for row in rows:
+            self._glossary_table.removeRow(row)
 
     # ------------------------------------------------------------------ interface
     def _build_interface_tab(self) -> QWidget:
@@ -717,6 +929,15 @@ class SettingsDialog(QDialog):
         translation.provider = self._provider_combo.currentData() or "auto"
         translation.target_lang = self._target_lang_combo.currentData() or "zh"
         translation.translate_partials = self._partials_check.isChecked()
+        glossary: dict[str, str] = {}
+        for row in range(self._glossary_table.rowCount()):
+            source_item = self._glossary_table.item(row, 0)
+            target_item = self._glossary_table.item(row, 1)
+            source = source_item.text().strip() if source_item else ""
+            target = target_item.text().strip() if target_item else ""
+            if source and target:
+                glossary[source] = target
+        translation.glossary = glossary
         translation.cloud.base_url = self._base_url_edit.text().strip() or "https://api.deepseek.com/v1"
         translation.cloud.model = self._cloud_model_edit.text().strip() or "deepseek-chat"
         translation.cloud.timeout_sec = float(self._timeout_spin.value())
@@ -726,6 +947,16 @@ class SettingsDialog(QDialog):
         ov.enabled = self._overlay_enabled.isChecked()
         ov.show_source = self._overlay_source.isChecked()
         ov.click_through = self._overlay_click.isChecked()
+        ov.font_family = self._font_combo.currentFont().family()
+        ov.text_color = str(self._text_color_button.property("colorValue") or "#FAF8FF")
+        ov.background_color = str(
+            self._background_color_button.property("colorValue") or "#07060C"
+        )
+        ov.alignment = self._alignment_combo.currentData() or "center"
+        ov.shadow = self._shadow_check.isChecked()
+        ov.shadow_color = str(
+            self._shadow_color_button.property("colorValue") or "#000000"
+        )
         ov.font_size = int(self._font_slider.value())
         ov.opacity = max(0.3, min(1.0, self._opacity_slider.value() / 100.0))
         ov.width = int(self._width_slider.value())

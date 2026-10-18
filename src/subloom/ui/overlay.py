@@ -9,7 +9,14 @@ from dataclasses import replace
 
 from PySide6.QtCore import QPoint, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QGuiApplication, QLinearGradient, QPainter, QPen
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QMenu, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QGraphicsDropShadowEffect,
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..config import OverlayConfig
 from ..i18n import display_language, tr
@@ -100,7 +107,9 @@ class SubtitleOverlay(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         rect = QRectF(1, 1, self.width() - 2, self.height() - 2)
         alpha = int(max(0.2, min(1.0, self.config.opacity)) * 242)
-        painter.setBrush(QColor(7, 6, 12, alpha))
+        background = QColor(self.config.background_color)
+        background.setAlpha(alpha)
+        painter.setBrush(background)
         painter.setPen(QPen(QColor(155, 108, 255, 48), 1))
         painter.drawRoundedRect(rect, 19, 19)
         # A neon gradient edge gives the overlay a modern, broadcast feel.
@@ -125,6 +134,16 @@ class SubtitleOverlay(QWidget):
         them here makes a stable translation disappear before it can be read.
         The main window can keep showing partials; the overlay is for reading.
         """
+        if segment.provider == "external":
+            # External subtitle cues already carry their own start/end times;
+            # the reading-time queue would desynchronize them.
+            self._hold_timer.stop()
+            self._final_queue.clear()
+            self._current_final = segment
+            self._current_final_shown_at = time.monotonic()
+            self._render_segment(segment)
+            return
+
         translated = segment.translated_text.strip()
         failed = bool(segment.warning)
 
@@ -250,7 +269,7 @@ class SubtitleOverlay(QWidget):
 
         self._translation.setText(main)
         colors = {
-            "translation": theme.TEXT,
+            "translation": self.config.text_color,
             "placeholder": theme.MUTED,
             "source": theme.TEXT_SOFT,
             "error": theme.WARN,
@@ -332,22 +351,42 @@ class SubtitleOverlay(QWidget):
 
     def apply_config(self, config: OverlayConfig) -> None:
         self.config = config
+        family = config.font_family.strip() or self.font().family()
         size = max(14, min(64, int(config.font_size)))
-        font = QFont(self.font())
+        font = QFont(family)
         font.setPixelSize(size)
         font.setWeight(QFont.DemiBold)
         self._translation.setFont(font)
-        self._translation.setStyleSheet(f"color: {theme.TEXT}; font-size: {size}px; font-weight: 600;")
-        source_font = QFont(self.font())
+        self._translation.setAlignment(self._text_alignment())
+        source_font = QFont(family)
         source_font.setPixelSize(max(10, int(size * 0.52)))
         self._source.setFont(source_font)
+        self._source.setAlignment(self._text_alignment())
         self._source.setStyleSheet(
             f"color: {theme.MUTED}; font-size: {max(10, int(size * 0.52))}px;"
         )
+        self._apply_shadow()
         self._set_click_through(config.click_through)
         self.setFixedWidth(int(config.width))
         self._refit()
         self.update()
+
+    def _text_alignment(self):
+        return {
+            "left": Qt.AlignLeft | Qt.AlignVCenter,
+            "center": Qt.AlignHCenter | Qt.AlignVCenter,
+            "right": Qt.AlignRight | Qt.AlignVCenter,
+        }.get(self.config.alignment, Qt.AlignHCenter | Qt.AlignVCenter)
+
+    def _apply_shadow(self) -> None:
+        if not self.config.shadow:
+            self._translation.setGraphicsEffect(None)
+            return
+        effect = QGraphicsDropShadowEffect(self._translation)
+        effect.setBlurRadius(10)
+        effect.setOffset(0, 2)
+        effect.setColor(QColor(self.config.shadow_color))
+        self._translation.setGraphicsEffect(effect)
 
     def _set_click_through(self, enabled: bool) -> None:
         self.setAttribute(Qt.WA_TransparentForMouseEvents, enabled)

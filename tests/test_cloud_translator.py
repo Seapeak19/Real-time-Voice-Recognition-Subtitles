@@ -125,6 +125,25 @@ def test_partial_omits_context(monkeypatch):
     assert "Previous line" not in user_text
 
 
+def test_glossary_is_added_to_prompt(monkeypatch):
+    monkeypatch.setenv("SUBLOOM_API_KEY", "sk-test")
+    with respx.mock:
+        route = respx.post("https://example.test/v1/chat/completions").mock(
+            return_value=httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": "接口"}}]},
+            )
+        )
+        client = CloudTranslator(make_config())
+        try:
+            client.translate("Use the API", "en", "zh", glossary=(("API", "接口"),))
+        finally:
+            client.close()
+    payload = json.loads(route.calls[0].request.content)
+    system_text = payload["messages"][0]["content"]
+    assert "API => 接口" in system_text
+
+
 def test_clean_response_strips_labels_and_quotes():
     assert _clean_response('"你好"') == "你好"
     assert _clean_response("Translation: hello") == "hello"

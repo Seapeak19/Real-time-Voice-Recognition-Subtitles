@@ -71,10 +71,17 @@ class CloudTranslator(Translator):
         context: Sequence[tuple[str, str]],
         *,
         partial: bool = False,
+        glossary: Sequence[tuple[str, str]] = (),
     ) -> list[dict[str, str]]:
         src_name = language_name(source, "en")
         tgt_name = language_name(target, "en")
         system = _SYSTEM_PROMPT.format(source=src_name, target=tgt_name)
+        if glossary:
+            preferred = "\n".join(f"- {source_term} => {target_term}" for source_term, target_term in glossary[:80])
+            system += (
+                "\n\nUse these preferred term/name translations consistently:\n"
+                + preferred
+            )
         recent = [] if partial else list(context)[-2:]
         if recent:
             lines = []
@@ -97,6 +104,7 @@ class CloudTranslator(Translator):
         context: Sequence[tuple[str, str]] = (),
         *,
         partial: bool = False,
+        glossary: Sequence[tuple[str, str]] = (),
     ) -> str:
         api_key = get_api_key()
         if not api_key:
@@ -104,7 +112,12 @@ class CloudTranslator(Translator):
         payload = {
             "model": self.config.model,
             "messages": self._messages(
-                text, source_lang, target_lang, context, partial=partial
+                text,
+                source_lang,
+                target_lang,
+                context,
+                partial=partial,
+                glossary=glossary,
             ),
             "temperature": 0.0,
             "max_tokens": max(96, min(800, len(text) * 4)),

@@ -110,7 +110,7 @@ def test_final_still_refines_cached_partial(monkeypatch):
     service = make_service(provider="cloud")
     calls: list[bool] = []
 
-    def fake_translate(text, source, target, context, *, partial=False):
+    def fake_translate(text, source, target, context, *, partial=False, glossary=()):
         calls.append(partial)
         return "局部预览" if partial else "上下文定稿"
 
@@ -130,7 +130,7 @@ def test_partial_flag_is_forwarded(monkeypatch):
     service = make_service(provider="cloud")
     seen: dict[str, bool] = {}
 
-    def fake_translate(text, source, target, context, *, partial=False):
+    def fake_translate(text, source, target, context, *, partial=False, glossary=()):
         seen["partial"] = partial
         return "你好"
 
@@ -163,3 +163,39 @@ def test_partial_failure_skips_local_fallback(monkeypatch):
     finally:
         service.close()
     assert local_calls == []
+
+
+def test_custom_sentence_translation_bypasses_provider():
+    service = make_service(
+        provider="off",
+        glossary={"Hello, world.": "你好，世界。"},
+    )
+    try:
+        translated, provider, fallback, warning = service.translate(
+            "Hello, world", "en", "zh"
+        )
+    finally:
+        service.close()
+    assert translated == "你好，世界。"
+    assert provider == "custom"
+    assert fallback is False
+    assert warning == ""
+
+
+def test_glossary_terms_are_forwarded_and_applied(monkeypatch):
+    monkeypatch.setenv("SUBLOOM_API_KEY", "sk-test")
+    service = make_service(provider="cloud", glossary={"API": "接口"})
+    seen: dict[str, tuple[tuple[str, str], ...]] = {}
+
+    def fake_translate(text, source, target, context, *, partial=False, glossary=()):
+        seen["glossary"] = tuple(glossary)
+        return "使用 API 完成。"
+
+    monkeypatch.setattr(service.cloud, "translate", fake_translate)
+    try:
+        translated, provider, _, _ = service.translate("Use the API.", "en", "zh")
+    finally:
+        service.close()
+    assert seen["glossary"] == (("API", "接口"),)
+    assert translated == "使用 接口 完成。"
+    assert provider == "cloud"

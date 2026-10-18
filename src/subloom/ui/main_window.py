@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -36,6 +37,7 @@ from ..config import AppConfig, save_config
 from ..i18n import display_language, language_choice_label, tr
 from ..models import CaptionSegment
 from ..pipeline import CaptionPipeline, PipelineCallbacks
+from ..subtitle_track import SubtitleTrackPlayer, parse_subtitle_file
 from ..transcript import TranscriptStore
 from ..translate import Readiness, TranslationService
 from . import theme
@@ -76,6 +78,11 @@ class MainWindow(QMainWindow):
         self._session_started: float | None = None
         self._selected_file: Path | None = None
         self._cards: dict[str, CaptionCard] = {}
+        self._external_player = SubtitleTrackPlayer(self)
+        self._external_active = False
+        self._external_path: Path | None = None
+        self._external_offset = 0.0
+        self._external_generation = 0
         self._error_timer = QTimer(self)
         self._error_timer.setSingleShot(True)
         self._error_timer.timeout.connect(lambda: self._error_banner.hide())
@@ -90,6 +97,8 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._build_overlay()
         self._connect_bridge()
+        self._external_player.cue_changed.connect(self._on_external_cue)
+        self._external_player.finished.connect(self._on_external_finished)
         self._apply_config_to_ui()
         self._restore_geometry()
         self._refresh_engine_hint()
@@ -349,6 +358,22 @@ class MainWindow(QMainWindow):
         self._provider_label.setStyleSheet(f"color: {theme.DIM}; font-size: 10px;")
         top.addWidget(self._provider_label)
         top.addStretch(1)
+        self._subtitle_file_btn = QPushButton(tr("字幕文件"))
+        self._subtitle_file_btn.setObjectName("GhostButton")
+        self._subtitle_menu = QMenu(self._subtitle_file_btn)
+        self._load_subtitle_action = self._subtitle_menu.addAction(
+            tr("载入外部字幕…"), lambda: self._load_external_subtitles()
+        )
+        self._realign_subtitle_action = self._subtitle_menu.addAction(
+            tr("按当前时间重新对齐"), lambda: self._realign_external_subtitles()
+        )
+        self._stop_subtitle_action = self._subtitle_menu.addAction(
+            tr("停止外部字幕"), lambda: self._stop_external_subtitles()
+        )
+        self._realign_subtitle_action.setEnabled(False)
+        self._stop_subtitle_action.setEnabled(False)
+        self._subtitle_file_btn.setMenu(self._subtitle_menu)
+        top.addWidget(self._subtitle_file_btn)
         self._export_btn = QPushButton(tr("导出"))
         self._export_btn.setObjectName("SecondaryButton")
         self._export_btn.setEnabled(False)
@@ -540,6 +565,7 @@ class MainWindow(QMainWindow):
             {
                 "cloud": tr("云端翻译"),
                 "local": tr("本地翻译"),
+                "custom": tr("自定义字幕"),
                 "off": tr("仅原文"),
                 "none": tr("未配置翻译"),
             }.get(readiness.provider, "")
@@ -591,6 +617,109 @@ class MainWindow(QMainWindow):
             self._selected_file = Path(filename)
             self._file_edit.setText(filename)
             self._file_edit.setToolTip(filename)
+
+    # ------------------------------------------------------- external subtitles
+    def _load_external_subtitles(self) -> None:
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            tr("载入外部字幕"),
+            "",
+            tr("字幕文件 (*.srt *.vtt *.ass *.ssa);;所有文件 (*.*)"),
+        )
+        if not filename:
+            return
+        try:
+            cues = parse_subtitle_file(filename)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, tr("无法载入字幕"), str(exc))
+            return
+        if not cues:
+            QMessageBox.warning(
+                self, tr("无法载入字幕"), tr("这个文件里没有可用的字幕时间轴。")
+            )
+            return
+        offset = self._ask_subtitle_offset(0.0)
+        if offset is None:
+            return
+        self._external_path = Path(filename)
+        self._external_offset = offset
+        self._external_generation += 1
+        self._external_player.set_cues(cues)
+        self._external_active = True
+        self._subtitle_file_btn.setText(tr("外部字幕"))
+        self._realign_subtitle_action.setEnabled(True)
+        self._stop_subtitle_action.setEnabled(True)
+        self._overlay.clear()
+        if not self.config.overlay.enabled:
+            self._overlay_toggle.setChecked(True)
+        else:
+            self._overlay.show_overlay()
+        self._external_player.start(offset)
+        self._status_text.setText(tr("外部字幕：{name}", name=self._external_path.name))
+
+    def _ask_subtitle_offset(self, current: float) -> float | None:
+        value, accepted = QInputDialog.getDouble(
+            self,
+            tr("字幕时间偏移"),
+            tr("正数表示字幕延后出现（秒），负数表示提前。"),
+            current,
+            -120.0,
+            120.0,
+            1,
+        )
+        return float(value) if accepted else None
+
+    def _realign_external_subtitles(self) -> None:
+        if not self._external_active or self._external_path is None:
+            return
+        offset = self._ask_subtitle_offset(self._external_offset)
+        if offset is None:
+            return
+        self._external_offset = offset
+        self._overlay.clear()
+        self._external_player.start(offset)
+        self._status_text.setText(tr("外部字幕已重新对齐"))
+
+    def _stop_external_subtitles(self, silent: bool = False) -> None:
+        if not self._external_active and not self._external_player.active:
+            return
+        self._external_player.stop()
+        self._external_active = False
+        self._subtitle_file_btn.setText(tr("字幕文件"))
+        self._realign_subtitle_action.setEnabled(False)
+        self._stop_subtitle_action.setEnabled(False)
+        self._overlay.clear()
+        if not silent:
+            self._status_text.setText(tr("外部字幕已停止"))
+
+    def _on_external_finished(self) -> None:
+        if self._external_active:
+            self._stop_external_subtitles(silent=True)
+            self._status_text.setText(tr("外部字幕播放结束"))
+
+    def _on_external_cue(self, text: str, index: int) -> None:
+        if not self._external_active:
+            return
+        if not text:
+            self._overlay.clear()
+            return
+        cue = None
+        cues = self._external_player.cues
+        if 0 <= index < len(cues):
+            cue = cues[index]
+        segment = CaptionSegment(
+            id=f"external-{self._external_generation}-{index}",
+            source_text="",
+            translated_text=text,
+            source_lang=self.config.translation.target_lang,
+            target_lang=self.config.translation.target_lang,
+            start=cue.start if cue else 0.0,
+            end=cue.end if cue else 0.0,
+            is_final=True,
+            revision=1,
+            provider="external",
+        )
+        self._overlay.set_segment(segment)
 
     def _on_target_changed(self, _index: int | None = None) -> None:
         code = self._target_combo.currentData()
@@ -692,6 +821,8 @@ class MainWindow(QMainWindow):
     def _start_session(self) -> None:
         if self._stopping:
             return
+        if self._external_active:
+            self._stop_external_subtitles(silent=True)
         error = self._validate_source()
         if error:
             QMessageBox.warning(self, tr("无法开始"), error)
@@ -850,7 +981,7 @@ class MainWindow(QMainWindow):
     def _on_segment(self, segment: CaptionSegment) -> None:
         stored = self.transcript.upsert(segment)
         self._render_segment(stored)
-        if self.config.overlay.enabled:
+        if self.config.overlay.enabled and not self._external_active:
             self._overlay.set_segment(stored)
         self._export_btn.setEnabled(bool(self.transcript.finals))
         self._stats_label.setText(tr("{count} 句", count=len(self.transcript.finals)))
@@ -858,7 +989,11 @@ class MainWindow(QMainWindow):
             self._detected_label.setText(display_language(stored.source_lang))
         if stored.provider:
             self._provider_label.setText(
-                {"cloud": tr("云端翻译"), "local": tr("本地翻译")}.get(stored.provider, "")
+                {
+                    "cloud": tr("云端翻译"),
+                    "local": tr("本地翻译"),
+                    "custom": tr("自定义字幕"),
+                }.get(stored.provider, "")
             )
         if stored.is_final:
             self._status_text.setText(tr("已识别一句，继续聆听…"))
@@ -1055,6 +1190,7 @@ class MainWindow(QMainWindow):
                 return
         self._closing = True
         self._sync_config_from_ui()
+        self._external_player.stop()
         if self._pipeline is not None:
             try:
                 self._pipeline.close()

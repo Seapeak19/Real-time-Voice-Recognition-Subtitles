@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
@@ -70,6 +71,7 @@ class TranslationConfig:
     provider: str = "auto"  # auto | cloud | local | off
     target_lang: str = DEFAULT_TARGET
     translate_partials: bool = True
+    glossary: dict[str, str] = field(default_factory=dict)
     cloud: CloudConfig = field(default_factory=CloudConfig)
     local: LocalTranslationConfig = field(default_factory=LocalTranslationConfig)
 
@@ -78,7 +80,13 @@ class TranslationConfig:
 class OverlayConfig:
     enabled: bool = True
     show_source: bool = False
+    font_family: str = ""
     font_size: int = 26
+    text_color: str = "#FAF8FF"
+    background_color: str = "#07060C"
+    alignment: str = "center"  # left | center | right
+    shadow: bool = True
+    shadow_color: str = "#000000"
     opacity: float = 0.84
     hold_ms: int = 1800
     click_through: bool = False
@@ -126,10 +134,25 @@ class AppConfig:
         self.audio.vad_aggressiveness = min(3, max(0, int(self.audio.vad_aggressiveness)))
         self.audio.input_gain_db = min(24.0, max(-24.0, float(self.audio.input_gain_db)))
         self.translation.translate_partials = bool(self.translation.translate_partials)
+        self.translation.glossary = {
+            str(key).strip()[:200]: str(value).strip()[:500]
+            for key, value in dict(self.translation.glossary or {}).items()
+            if str(key).strip() and str(value).strip()
+        }
         self.translation.cloud.timeout_sec = min(60.0, max(2.0, float(self.translation.cloud.timeout_sec)))
         self.translation.cloud.max_retries = min(3, max(0, int(self.translation.cloud.max_retries)))
         self.translation.local.beam_size = min(8, max(1, int(self.translation.local.beam_size)))
+        self.overlay.font_family = str(self.overlay.font_family or "").strip()[:80]
         self.overlay.font_size = min(64, max(12, int(self.overlay.font_size)))
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", str(self.overlay.text_color)):
+            self.overlay.text_color = "#FAF8FF"
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", str(self.overlay.background_color)):
+            self.overlay.background_color = "#07060C"
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", str(self.overlay.shadow_color)):
+            self.overlay.shadow_color = "#000000"
+        if self.overlay.alignment not in {"left", "center", "right"}:
+            self.overlay.alignment = "center"
+        self.overlay.shadow = bool(self.overlay.shadow)
         self.overlay.hold_ms = min(4000, max(800, int(self.overlay.hold_ms)))
         self.overlay.opacity = min(1.0, max(0.2, float(self.overlay.opacity)))
         self.overlay.width = min(2400, max(420, int(self.overlay.width)))
